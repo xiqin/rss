@@ -1,0 +1,22 @@
+#!/bin/bash
+# rss session-start hook
+# 在会话开始时检测项目是否已初始化
+
+# 检查是否在项目根目录
+if [ ! -f "CLAUDE.md" ] && [ ! -f "package.json" ] && [ ! -f "go.mod" ] && [ ! -f "requirements.txt" ]; then
+    echo "未检测到项目根目录，跳过 rss 初始化检查"
+    exit 0
+fi
+
+# 检查是否已初始化
+if [ ! -f ".claude/memory/constitution.md" ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " rss: 项目未初始化"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo " 建议运行 /rss-init-project 扫描项目并生成配置"
+    echo ""
+fi
+
+exit 0

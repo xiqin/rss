@@ -1,0 +1,116 @@
+# Go + Gin 示例配置
+
+## 项目信息
+
+```yaml
+project:
+  name: "my-go-app"
+  language: "Go 1.24"
+  framework: "Gin 1.9"
+  orm: "GORM"
+  database: "MySQL 5.7"
+  cache: "Redis (go-redis v9)"
+  logging: "Zap"
+  di: "Google Wire"
+```
+
+## 目录结构
+
+```
+cmd/
+  server/main.go       # HTTP Server 入口
+  queue/main.go        # Queue Worker 入口
+config/
+  config.yaml          # 配置文件
+  register.go          # 配置结构体
+internal/
+  contracts/           # 常量、接口定义
+  controllers/         # 控制器层
+    backend/           # 后台接口
+    api/               # API 接口
+  middleware/          # 中间件
+  models/              # 数据模型
+    raws/              # GORM 自动生成
+  repository/          # 数据访问层
+  routers/             # 路由定义
+  service/             # 业务逻辑层
+  store/               # 数据库连接管理
+  utils/               # 工具函数
+pkg/                   # 公共工具包
+```
+
+## 编码红线
+
+1. 禁止在 Controller 中写业务逻辑
+2. 禁止使用 `fmt.Println` / `log.Print`（必须用 Zap）
+3. 禁止硬编码配置值
+4. 禁止捕获通用异常后静默吞掉
+5. 禁止手写 SQL 拼接（必须参数化）
+6. 禁止修改自动生成文件
+
+## 开发命令
+
+```bash
+# 编译
+go build ./...
+
+# 测试
+go test ./... -v -count=1
+
+# 静态检查
+go vet ./...
+
+# 生成 DB Model
+go run cmd/generator/dbmodels/main.go -dir="internal/models" -pkg="raws" -tables="table1,table2"
+
+# 生成业务文件
+go run scripts/templates/main.go -mode="rc" -module="backend" -pkg="sy" -name="xxx"
+```
+
+## 响应格式
+
+**Backend 接口：**
+```go
+response.BackendSuccessResponse(ctx, data)
+response.BackendErrorAutoResponse(ctx, err)
+```
+
+**API 接口：**
+```go
+response.SuccessResponse(ctx, data)
+response.ErrorAutoResponse(ctx, err)
+```
+
+## 错误处理
+
+```go
+// Service 层
+return nil, errs.New(code, msg)
+
+// Controller 层
+response.BackendErrorAutoResponse(ctx, err)
+```
+
+## 缓存使用
+
+```go
+result, err := cache.GetOrSet(ctx, key, ttl, func() (T, error) {
+    return fetchData()
+})
+```
+
+## 分页查询
+
+```go
+result, err := provider.GormDataProvider[T](db, page, pageSize, conditions...)
+```
+
+## 路由注册
+
+```go
+func init() {
+    interfaces.RegisterRouterFactory("backend", func(r *gin.RouterGroup) {
+        // 路由定义
+    })
+}
+```

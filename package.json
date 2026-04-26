@@ -1,0 +1,11 @@
+{
+  "name": "rss",
+  "version": "1.0.0",
+  "description": "Requirement-Driven Software Engineering — AI 工程化框架",
+  "license": "MIT",
+  "keywords": ["ai", "engineering", "skills", "pipeline", "tdd", "chinese"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<org>/rss"
+  }
+}

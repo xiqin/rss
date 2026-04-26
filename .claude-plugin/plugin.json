@@ -1,0 +1,9 @@
+{
+  "name": "rss",
+  "description": "Requirement-Driven Software Engineering — AI 工程化框架，基于 superpowers 增强：5 步流水线、项目宪章、5 维审查、进度追踪",
+  "version": "1.0.0",
+  "license": "MIT",
+  "homepage": "https://github.com/<org>/rss",
+  "repository": "https://github.com/<org>/rss",
+  "keywords": ["skills", "engineering", "pipeline", "review", "tdd", "chinese"]
+}

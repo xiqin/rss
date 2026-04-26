@@ -1,0 +1,6 @@
+{
+  "sessionStart": {
+    "command": "hooks/session-start",
+    "description": "Session 开始时加载项目上下文"
+  }
+}
