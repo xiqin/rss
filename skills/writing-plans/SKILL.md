@@ -18,7 +18,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■□□□□□□] Step 2/5 — 计划拆解 (writing-plans)
+ pipeline [■■□□□] Step 2/5 — 计划拆解 (writing-plans)
  skill:   writing-plans
  功能:    <功能名>
  status:  ▶ 开始执行
@@ -29,7 +29,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■□□□□□□] Step 2/5 — 计划拆解 (writing-plans)
+ pipeline [■■□□□] Step 2/5 — 计划拆解 (writing-plans)
  status:  ✅ 完成 (N 个 task)
  下一步:  等待用户确认 → Step 3: git-worktree
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -87,26 +87,26 @@ description: >
 - **复杂度**: 简单 / 中等 / 复杂
 - **依赖**: Task X, Task Y（无则写"无"）
 - **涉及文件**:
-  - 创建: `path/to/new/file.go`
-  - 修改: `path/to/existing/file.go`（在具体位置添加方法）
+  - 创建: `path/to/new/file.<ext>`
+  - 修改: `path/to/existing/file.<ext>`（在具体位置添加方法）
 - **实现步骤**:
-  1. 在 `path/to/file.go` 中创建结构体:
-     ```go
-     // 具体代码示例，无占位符
+  1. 在 `path/to/file.<ext>` 中创建结构体/类:
+     ```
+     // 具体代码示例，按项目语言编写，无占位符
      ```
   2. 添加方法:
-     ```go
-     // 具体代码示例，无占位符
+     ```
+     // 具体代码示例
      ```
 - **单元测试**:
-  - 测试文件: `path/to/file_test.go`
+  - 测试文件: `path/to/file_test.<ext>`
   - 测试用例:
-    ```go
+    ```
     // 具体测试代码
     ```
 - **验证命令**:
   ```bash
-  go test ./path/to/ -v -run TestXxx
+  <TEST_CMD 对应的单文件测试命令>
   ```
 - **commit**: `feat(xxx): <描述>`
 ```
@@ -123,7 +123,7 @@ description: >
 ## 编码红线（task 中绝对禁止）
 
 1. 在 Controller 中写业务逻辑
-2. 使用 `fmt.Println` / `log.Print`（必须用项目日志组件）
+2. 使用语言默认的调试打印（如 Go 的 `fmt.Println`、Python 的 `print()`、JS 的 `console.log`）——必须用项目日志组件
 3. 硬编码配置值（密码、密钥、URL）
 4. 手写 SQL 拼接（必须参数化）
 5. 修改自动生成的代码文件
@@ -143,6 +143,6 @@ description: >
 
 ## 完成条件与下一步
 
-plan.md 保存完毕后，**等待用户确认 plan**。
+plan.md 保存完毕后，同时更新 `specs/<date+feature>/progress.md`，**等待用户确认 plan**。
 
 用户确认后，**必须立即触发 git-worktree**（using-git-worktrees skill）。

@@ -20,7 +20,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■□□□□□□□] Step 1/5 — 头脑风暴 (brainstorming)
+ pipeline [■□□□□] Step 1/5 — 头脑风暴 (brainstorming)
  skill:   brainstorming
  功能:    <功能名>
  status:  ▶ 开始执行
@@ -31,7 +31,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■□□□□□□□] Step 1/5 — 头脑风暴 (brainstorming)
+ pipeline [■□□□□] Step 1/5 — 头脑风暴 (brainstorming)
  status:  ✅ 完成 (N 种方案待选)
  下一步:  等待用户确认 → Step 2: writing-plans
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -151,6 +151,6 @@ spec.md 格式：
 
 ## 完成条件与下一步
 
-spec.md 保存完毕后，**等待用户确认方案**。
+spec.md 保存完毕后，同时更新 `specs/<date+feature>/progress.md`，**等待用户确认方案**。
 
 用户确认后，**必须立即触发 writing-plans**（writing-plans skill）。

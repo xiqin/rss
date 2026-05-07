@@ -3,7 +3,7 @@
   "description": "Requirement-Driven Software Engineering — AI 工程化框架",
   "version": "1.0.0",
   "license": "MIT",
-  "homepage": "https://github.com/<org>/rss",
-  "repository": "https://github.com/<org>/rss",
+  "homepage": "https://github.com/xiqin/rss",
+  "repository": "https://github.com/xiqin/rss",
   "keywords": ["skills", "engineering", "pipeline", "review", "tdd", "chinese"]
 }

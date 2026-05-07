@@ -42,14 +42,23 @@ brainstorming → writing-plans → git-worktree → subagent-dev → index-upda
 
 | Skill | 说明 |
 |-------|------|
-| code-review | 5 维代码审查 |
 | init-project | 项目初始化（扫描 + 生成宪章/结构） |
-| rss-analyze | 需求分析（deprecated → brainstorming） |
-| rss-test | 功能测试闭环 |
+| using-rss | rss 框架使用指南 |
 
 ### 通用 Skills（继承 superpowers）
 
-test-driven-development, systematic-debugging, verification-before-completion, using-git-worktrees, finishing-a-development-branch, requesting-code-review, receiving-code-review, dispatching-parallel-agents, writing-skills, executing-plans
+| Skill | 说明 |
+|-------|------|
+| test-driven-development | TDD 测试驱动开发 |
+| systematic-debugging | 系统性调试 |
+| verification-before-completion | 完成前验证 |
+| using-git-worktrees | Git worktree 管理 |
+| finishing-a-development-branch | 分支完成流程 |
+| requesting-code-review | 请求代码审查 |
+| receiving-code-review | 接收代码审查 |
+| dispatching-parallel-agents | 并行 agent 派发 |
+| writing-skills | 编写自定义 skills |
+| executing-plans | 执行计划 |
 
 ## 流水线状态横幅
 

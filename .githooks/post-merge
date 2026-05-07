@@ -1,0 +1,10 @@
+#!/bin/bash
+# post-merge hook: sync assets after git pull/merge
+# 配置: git config core.hooksPath .githooks
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ -f "$SCRIPT_DIR/scripts/sync-assets.mjs" ]; then
+  echo "rss: syncing assets..."
+  node "$SCRIPT_DIR/scripts/sync-assets.mjs"
+fi

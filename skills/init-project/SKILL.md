@@ -56,6 +56,18 @@ description: >
 | 日志 | import 分析 | Zap |
 | DI | import 分析 | Google Wire |
 
+**语言检测后，生成对应的构建/测试/检查命令（示例以 Go 为例，其他语言同理）：**
+
+| 语言 | BUILD_CMD | VET_CMD | TEST_CMD |
+|------|-----------|---------|----------|
+| Go | `go build ./...` | `go vet ./...` | `go test ./... -v -count=1` |
+| Python | `python -m py_compile .` | `ruff check .` | `pytest -v` |
+| Node.js | `npx tsc --noEmit` | `eslint .` | `npm test` |
+| Rust | `cargo build` | `cargo clippy` | `cargo test` |
+| Java | `mvn compile` / `gradle build` | `mvn checkstyle:check` / `gradle check` | `mvn test` / `gradle test` |
+
+写入宪章 `{{BUILD_CMD}}`、`{{VET_CMD}}`、`{{TEST_CMD}}` 变量。
+
 ### Step 2: 深度分析源码
 
 **2.1 提取错误处理模式**
@@ -198,11 +210,30 @@ pkg/          → 公共工具包
 | `{{DI}}` | import 分析 | Google Wire |
 | `{{ARCH_PATTERN}}` | 目录结构推断 | Router→Controller→Service→Repository |
 | `{{ENTRY_POINTS}}` | cmd/ / main.* 扫描 | cmd/server, cmd/queue |
-| `{{TEST_CMD}}` | 测试框架检测 | go test ./... -v -count=1 |
-| `{{BUILD_CMD}}` | 构建文件检测 | go build ./... |
+| `{{TEST_CMD}}` | 语言检测 | go test ./... -v -count=1 |
+| `{{BUILD_CMD}}` | 语言检测 | go build ./... |
+| `{{VET_CMD}}` | 语言检测 | go vet ./... |
 | `{{ERROR_PATTERN}}` | 源码分析 | errs.New(code, msg) |
 | `{{RESPONSE_PATTERN}}` | 源码分析 | response.Backend***Response |
 | `{{CODING_REDLINES}}` | 模式检测 + 默认 | 自动生成编码红线列表 |
+| `{{LOGGING_PATTERN}}` | 源码分析 | logger.Info("描述", zap.String("key", value)) |
+| `{{DI_PATTERN}}` | 源码分析 | Google Wire |
+| `{{ARCH_PRINCIPLE}}` | 架构推断 | 分层架构 |
+| `{{ARCH_DESC}}` | 架构推断 | Router→Controller→Service→Repository |
+| `{{DI_PRINCIPLE}}` | DI 检测 | 依赖注入 |
+| `{{DI_DESC}}` | DI 检测 | Google Wire 自动生成依赖图 |
+| `{{CONFIG_PRINCIPLE}}` | 配置检测 | 配置外置 |
+| `{{CONFIG_DESC}}` | 配置检测 | 环境变量 + 配置文件分离 |
+| `{{ERROR_PRINCIPLE}}` | 错误处理检测 | 统一错误处理 |
+| `{{ERROR_DESC}}` | 错误处理检测 | 统一错误码 + 包装错误 |
+| `{{CODEGEN_PRINCIPLE}}` | 代码生成检测 | 代码生成 |
+| `{{CODEGEN_DESC}}` | 代码生成检测 | GORM Gen 自动生成 Model |
+| `{{CACHE_VERSION}}` | 版本检测 | go-redis v9 |
+| `{{LOGGING_VERSION}}` | 版本检测 | Zap v1.27 |
+| `{{DI_VERSION}}` | 版本检测 | Wire v0.6 |
+| `{{DEV_FLOW}}` | 用户确认 | clone → branch → code → test → PR |
+| `{{DIRECTORY_TREE}}` | 目录扫描 | 自动生成目录树 |
+| `{{TECH_STACK_SUMMARY}}` | 汇总 | Go 1.24 + Gin + GORM + MySQL |
 
 ## 约束
 

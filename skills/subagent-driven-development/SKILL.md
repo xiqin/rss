@@ -20,7 +20,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■■■□□□□] Step 4/5 — 编码执行 (subagent-dev)
+ pipeline [■■■■□] Step 4/5 — 编码执行 (subagent-dev)
  skill:   subagent-driven-development
  功能:    <功能名>
  status:  ▶ 开始执行 (N 个 task)
@@ -31,7 +31,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■■■□□□□] Step 4/5 — 编码执行 (subagent-dev)
+ pipeline [■■■■□] Step 4/5 — 编码执行 (subagent-dev)
  status:  ✅ 完成 (N/N task PASS, 测试报告已生成)
  下一步:  → Step 5: index-update
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -85,7 +85,7 @@ Task N ──→ implementer ──→ reviewer（spec + quality 合并）──
 ## 实现要求
 1. 严格按 task 中的实现步骤编写代码
 2. 编写对应的单元测试文件
-3. 实现完成后执行: go build ./... && go vet ./...
+3. 根据上方项目约束中的构建和测试命令执行（BUILD_CMD、VET_CMD、TEST_CMD 已在 subagent-context.md 模板中渲染为实际命令）
 4. 如果 task 有依赖的前置 task，检查相关代码是否已存在
 
 ## 输出
@@ -204,7 +204,7 @@ Task N ──→ implementer ──→ reviewer（spec + quality 合并）──
 
 ### 最终验证
 
-在 test-reporter 之前，先执行全量编译和测试。全部通过后方可派发 test-reporter 生成报告。
+在 test-reporter 之前，先执行全量编译和测试。全部通过后方可派发 test-reporter 生成报告。同时更新 `specs/<date+feature>/progress.md`。
 
 ## 关键规则
 

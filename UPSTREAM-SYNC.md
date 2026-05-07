@@ -10,10 +10,10 @@ rss 基于 superpowers 增强，需要定期同步上游更新。
 
 ```bash
 # 首次添加 superpowers 仓库
-git subtree add --prefix=upstream/superpowers https://github.com/superpowers/superpowers.git main --squash
+git subtree add --prefix=upstream/superpowers https://github.com/superpowers/superpowers-core.git main --squash
 
 # 定期同步更新
-git subtree pull --prefix=upstream/superpowers https://github.com/superpowers/superpowers.git main --squash
+git subtree pull --prefix=upstream/superpowers https://github.com/superpowers/superpowers-core.git main --squash
 
 # 同步后，对比差异
 diff -rq upstream/superpowers/skills/ skills/
@@ -38,8 +38,8 @@ rss/
 
 1. **拉取上游更新**
    ```bash
-   git subtree pull --prefix=upstream/superpowers https://github.com/superpowers/superpowers.git main --squash
-   ```
+git subtree pull --prefix=upstream/superpowers https://github.com/superpowers/superpowers-core.git main --squash
+```
 
 2. **对比差异**
    ```bash
@@ -62,7 +62,7 @@ rss/
 
 ```bash
 # 添加 superpowers 为 remote
-git remote add superpowers https://github.com/superpowers/superpowers.git
+git remote add superpowers https://github.com/superpowers/superpowers-core.git
 
 # 获取最新变更
 git fetch superpowers

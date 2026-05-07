@@ -23,7 +23,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■■■■□□□] Step 5/5 — 索引更新 (index-update)
+ pipeline [■■■■■] Step 5/5 — 索引更新 (index-update)
  skill:   index-update
  status:  ▶ 开始执行
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -33,7 +33,7 @@ description: >
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■■■■□□□] Step 5/5 — 索引更新 (index-update)
+ pipeline [■■■■■] Step 5/5 — 索引更新 (index-update)
  status:  ✅ 完成
  下一步:  → 工作完成，可以提交
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

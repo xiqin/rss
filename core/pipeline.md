@@ -56,6 +56,6 @@ index-update 完成 → 通知可以提交
 | writing-plans | `spec.md` 存在且用户已确认 |
 | git-worktree | `plan.md` 存在 |
 | subagent-dev | `plan.md` 存在 + git worktree 已创建 |
-| index-update | 所有测试通过（`go build && go vet && go test`） |
+| index-update | 所有测试通过（构建 + 静态检查 + 单元测试） |
 
 前置条件未满足时，必须停止并提示用户。

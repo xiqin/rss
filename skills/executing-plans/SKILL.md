@@ -1,85 +1,77 @@
 ---
 name: executing-plans
-description: >
-  执行计划。按计划文件逐任务执行实现。
-  Use when: executing a structured implementation plan.
-  Trigger keywords: 执行计划, 按计划执行, run plan.
+description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
 ---
 
-# 执行计划
+# Executing Plans
 
-## 触发条件
+## Overview
 
-- `plan.md` 已存在
-- 用户确认计划后
+Load plan, review critically, execute all tasks, report when complete.
 
-## 执行流程
+**Announce at start:** "I'm using the executing-plans skill to implement this plan."
 
-### Step 1：读取计划
+**Note:** 此 skill 在 rss 中已被 subagent-driven-development 替代。Tell your human partner that Superpowers works much better with access to subagents. The quality of its work will be significantly higher if run on a platform with subagent support (such as Claude Code or Codex). If subagents are available, use subagent-driven-development instead of this skill.
 
-1. 读取 `specs/<feature>/plan.md`
-2. 提取所有 task
-3. 分析依赖关系
+## The Process
 
-### Step 2：按顺序执行
+### Step 1: Load and Review Plan
 
-严格按 task 编号顺序执行：
+1. Read plan file
+2. Review critically - identify any questions or concerns about the plan
+3. If concerns: Raise them with your human partner before starting
+4. If no concerns: Create TodoWrite and proceed
 
-1. 先执行无依赖的 task
-2. 等依赖 task 完成后再执行后续 task
-3. 每个 task 完成后验证
+### Step 2: Execute Tasks
 
-### Step 3：每个 Task 执行
+For each task:
 
-```
-对于每个 Task：
-1. 读取 task 完整内容
-2. 理解实现步骤
-3. 编写代码
-4. 编写测试
-5. 运行测试
-6. 验证编译
-```
+1. Mark as in_progress
+2. Follow each step exactly (plan has bite-sized steps)
+3. Run verifications as specified
+4. Mark as completed
 
-### Step 4：逐任务验证
+### Step 3: Complete Development
 
-每个 task 完成后：
+After all tasks complete and verified:
 
-```bash
-go test ./path/to/ -v -run TestXxx
-go build ./... && go vet ./...
-```
+- Announce: "I'm using the finishing-a-development-branch skill to complete this work."
+- **REQUIRED SUB-SKILL:** Use finishing-a-development-branch
+- Follow that skill to verify tests, present options, execute choice
 
-### Step 5：全量验证
+## When to Stop and Ask for Help
 
-所有 task 完成后：
+**STOP executing immediately when:**
 
-```bash
-go build ./... && go vet ./... && go test ./... -v -count=1
-```
+- Hit a blocker (missing dependency, test fails, instruction unclear)
+- Plan has critical gaps preventing starting
+- You don't understand an instruction
+- Verification fails repeatedly
 
-## 状态追踪
+**Ask for clarification rather than guessing.**
 
-在执行过程中更新进度：
+## When to Revisit Earlier Steps
 
-```markdown
-## 执行进度
+**Return to Review (Step 1) when:**
 
-| Task | 状态 | 完成时间 |
-|------|------|---------|
-| Task 1 | ✅ 完成 | HH:mm |
-| Task 2 | ✅ 完成 | HH:mm |
-| Task 3 | ▶ 进行中 | — |
-| Task 4 | ⏳ 等待 | — |
-```
+- Partner updates the plan based on your feedback
+- Fundamental approach needs rethinking
 
-## 约束
+**Don't force through blockers** - stop and ask.
 
-- 严格按 task 顺序执行
-- 每个 task 必须通过测试才能继续
-- 遇到依赖缺失时停止并提示
-- 遇到模糊不清时停止并询问用户
+## Remember
 
-## 完成条件与下一步
+- Review plan critically first
+- Follow plan steps exactly
+- Don't skip verifications
+- Reference skills when plan says to
+- Stop when blocked, don't guess
+- Never start implementation on main/master branch without explicit user consent
 
-所有 task 完成且测试通过后，触发 code-review 进行代码审查。
+## Integration
+
+**Required workflow skills:**
+
+- **using-git-worktrees** - Ensures isolated workspace (creates one or verifies existing)
+- **writing-plans** - Creates the plan this skill executes
+- **finishing-a-development-branch** - Complete development after all tasks

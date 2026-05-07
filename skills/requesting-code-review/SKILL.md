@@ -13,11 +13,7 @@ description: >
 ### Step 1：准备审查材料
 
 1. 确认所有变更已完成
-2. 运行验证确保代码质量
-
-```bash
-go build ./... && go vet ./... && go test ./... -v -count=1
-```
+2. 运行验证确保代码质量（读取宪章中的 BUILD_CMD、VET_CMD、TEST_CMD 并执行）
 
 ### Step 2：整理变更摘要
 
@@ -39,8 +35,8 @@ git log --oneline -10
 
 | 文件 | 变更类型 | 说明 |
 |------|---------|------|
-| path/to/file.go | 新增 | XxxService 实现 |
-| path/to/file2.go | 修改 | 新增方法 |
+| path/to/file1 | 新增 | XxxService 实现 |
+| path/to/file2 | 修改 | 新增方法 |
 
 ### 重点关注
 

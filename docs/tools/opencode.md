@@ -1,5 +1,7 @@
 # OpenCode 适配
 
+> 公共内容参见 [`common.md`](common.md)
+
 ## 安装
 
 ### 插件配置
@@ -26,23 +28,6 @@ OpenCode 通过配置引用 rss skills 路径。
 
 ```
 activate_skill("brainstorming")
-```
-
-### 文件结构
-
-OpenCode 版本使用相同的 skills 结构：
-
-```
-项目根目录/
-├── .opencode/
-│   └── plugin.json
-├── .claude/
-│   ├── memory/
-│   ├── rules/
-│   ├── skills/
-│   └── templates/
-├── CLAUDE.md
-└── specs/
 ```
 
 ## 适配说明
@@ -83,10 +68,4 @@ OpenCode 的 hook 机制可能与 Claude Code 不同，需要适配 `hooks/sessi
 
 ### 常见问题
 
-**Skill 未触发**
-- 确认 activate_skill 调用正确
-- 检查 SKILL.md 格式
-
-**Hooks 未执行**
-- 检查 OpenCode 的 hook 配置
-- 确认脚本路径正确
+参见 [common.md#常见问题](common.md#常见问题)

@@ -29,9 +29,7 @@ git diff --stat
 
 ### Step 3：运行最终验证
 
-```bash
-go build ./... && go vet ./... && go test ./... -v -count=1
-```
+读取 `.claude/memory/constitution.md` 中的 BUILD_CMD、VET_CMD、TEST_CMD，依次执行。
 
 - [ ] 编译通过
 - [ ] vet 通过

@@ -1,5 +1,7 @@
 # GitHub Copilot 适配
 
+> 公共内容参见 [`common.md`](common.md)
+
 ## 安装
 
 ### 方式 1：直接引用
@@ -51,7 +53,7 @@ rss 使用 `.github/copilot-plugin.json`（如果 Copilot 支持插件）：
 {
   "name": "rss",
   "description": "Requirement-Driven Software Engineering",
-  "instructions": "https://github.com/<org>/rss/blob/main/CLAUDE.md"
+  "instructions": "https://github.com/xiqin/rss/blob/main/CLAUDE.md"
 }
 ```
 
@@ -77,25 +79,6 @@ rss 使用 `.github/copilot-plugin.json`（如果 Copilot 支持插件）：
 
 Copilot 会根据 `copilot-instructions.md` 中的规则自动提供建议。
 
-## 文件结构
-
-```
-项目根目录/
-├── .github/
-│   └── copilot-instructions.md  # Copilot 指令
-├── .claude/
-│   ├── memory/
-│   │   ├── constitution.md      # 项目宪章
-│   │   └── MEMORY.md            # 记忆文件
-│   ├── rules/
-│   │   └── project-structure.md # 工程结构约束
-│   └── skills/                  # Skills（供参考）
-├── CLAUDE.md                    # 项目入口
-├── ENGINEERING-INDEX.md         # 工程索引
-└── specs/
-    └── <date+feature>/
-```
-
 ## 适配说明
 
 ### 与 Claude Code 的差异
@@ -109,10 +92,7 @@ Copilot 会根据 `copilot-instructions.md` 中的规则自动提供建议。
 
 ### 最佳实践
 
-1. **详细描述需求**：Copilot 不自动加载 skill，需要在 prompt 中提供完整上下文
-2. **引用项目规则**：在 prompt 中引用 `constitution.md` 和 `project-structure.md`
-3. **分步执行**：每个流水线步骤单独触发
-4. **验证输出**：Copilot 生成的代码需要人工验证
+参见 [common.md#最佳实践](common.md#最佳实践)
 
 ## 自定义
 
@@ -146,15 +126,4 @@ Copilot 会根据 `copilot-instructions.md` 中的规则自动提供建议。
 
 ### 常见问题
 
-**Copilot 不遵循规则**
-- 确认 `.github/copilot-instructions.md` 格式正确
-- 检查指令是否足够详细
-- 在 prompt 中显式引用规则
-
-**上下文丢失**
-- 在每次对话中重新提供上下文
-- 使用 `@workspace` 前缀引用项目文件
-
-**输出不符合规范**
-- 在 prompt 中提供具体示例
-- 检查 `copilot-instructions.md` 中的编码红线
+参见 [common.md#常见问题](common.md#常见问题)

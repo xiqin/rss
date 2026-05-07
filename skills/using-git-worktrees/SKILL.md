@@ -51,7 +51,7 @@ git branch --show-current
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- pipeline [■■■□□□□□] Step 3/5 — git-worktree
+ pipeline [■■■□□] Step 3/5 — git-worktree
  功能:    <feature-name>
  status:  ✅ 完成
  分支:    feature/<date>-<feature-name>

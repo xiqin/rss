@@ -31,9 +31,7 @@ description: >
 2. 测试应验证 spec.md 中定义的预期行为
 3. 运行测试，确认测试失败
 
-```bash
-go test ./path/to/ -v -run TestXxx
-```
+读取宪章 TEST_CMD 并执行单文件测试。
 
 ### Step 3：绿（写最少代码）
 
@@ -41,9 +39,7 @@ go test ./path/to/ -v -run TestXxx
 2. 不要过度设计
 3. 运行测试，确认测试通过
 
-```bash
-go test ./path/to/ -v -run TestXxx
-```
+读取宪章 TEST_CMD 并执行单文件测试。
 
 ### Step 4：重构（优化代码）
 
@@ -51,10 +47,7 @@ go test ./path/to/ -v -run TestXxx
 2. 消除重复、改善命名
 3. 运行测试，确认测试仍然通过
 
-```bash
-go test ./path/to/ -v -run TestXxx
-go build ./... && go vet ./...
-```
+读取宪章 BUILD_CMD、VET_CMD、TEST_CMD 并执行。
 
 ### Step 5：重复
 
@@ -64,29 +57,17 @@ go build ./... && go vet ./...
 
 ### 测试文件命名
 
-- 测试文件与源文件同目录，以 `_test.go` 结尾
-- 测试函数以 `Test` 开头，后接方法名
+按项目语言的测试约定命名（如 Go 的 `_test.go`、Python 的 `test_*.py`、JS 的 `*.test.js`）。
 
 ### 测试结构
 
-```go
-func TestXxxService_MethodName(t *testing.T) {
-    // 1. 准备（Arrange）
-    repo := test.GetTestRepo()
-    svc := NewXxxService(repo)
-
-    // 2. 执行（Act）
-    result, err := svc.MethodName(params...)
-
-    // 3. 断言（Assert）
-    if err != nil {
-        t.Fatalf("expected no error, got %v", err)
-    }
-    if result == nil {
-        t.Fatal("expected result, got nil")
-    }
-}
 ```
+// 1. 准备（Arrange）
+// 2. 执行（Act）
+// 3. 断言（Assert）
+```
+
+按项目语言的测试框架编写具体测试代码。
 
 ### 测试覆盖
 

@@ -13,26 +13,20 @@ description: >
 
 ### 1. 编译验证
 
-```bash
-go build ./...
-```
+读取 `.claude/memory/constitution.md` 中的 `BUILD_CMD` 并执行。
 
 - [ ] 编译通过，无错误
 - [ ] 无编译警告
 
 ### 2. 静态分析
 
-```bash
-go vet ./...
-```
+读取 `.claude/memory/constitution.md` 中的 `VET_CMD` 并执行。
 
 - [ ] vet 通过，无警告
 
 ### 3. 测试验证
 
-```bash
-go test ./... -v -count=1
-```
+读取 `.claude/memory/constitution.md` 中的 `TEST_CMD` 并执行。
 
 - [ ] 所有测试通过
 - [ ] 无跳过的测试（除非有正当理由）
@@ -64,9 +58,7 @@ go test ./... -v -count=1
 
 ### Step 1：运行编译和测试
 
-```bash
-go build ./... && go vet ./... && go test ./... -v -count=1
-```
+读取 `.claude/memory/constitution.md` 中的 BUILD_CMD、VET_CMD、TEST_CMD，依次执行。
 
 ### Step 2：检查代码质量
 
@@ -92,9 +84,9 @@ go build ./... && go vet ./... && go test ./... -v -count=1
 
 | 检查项 | 状态 | 说明 |
 |--------|------|------|
-| go build | ✅ | 编译通过 |
-| go vet | ✅ | 无警告 |
-| go test | ✅ | 全部通过 |
+| BUILD_CMD | ✅ | 编译通过 |
+| VET_CMD | ✅ | 无警告 |
+| TEST_CMD | ✅ | 全部通过 |
 | 编码红线 | ✅ | 无违规 |
 | 功能完整性 | ✅ | 全部实现 |
 | 文档同步 | ✅ | 已更新 |

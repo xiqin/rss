@@ -2,8 +2,8 @@
 # rss session-start hook
 # 在会话开始时检测项目是否已初始化
 
-# 检查是否在项目根目录
-if [ ! -f "CLAUDE.md" ] && [ ! -f "package.json" ] && [ ! -f "go.mod" ] && [ ! -f "requirements.txt" ]; then
+# 检测项目根目录（与 CLI detect-project.js 保持一致）
+if [ ! -f "CLAUDE.md" ] && [ ! -f "package.json" ] && [ ! -f "go.mod" ] && [ ! -f "pyproject.toml" ] && [ ! -f "Cargo.toml" ] && [ ! -f "pom.xml" ] && [ ! -f "build.gradle" ] && [ ! -f "requirements.txt" ] && [ ! -f "Gemfile" ] && [ ! -f "build.zig" ] && [ ! -f "Makefile" ]; then
     echo "未检测到项目根目录，跳过 rss 初始化检查"
     exit 0
 fi

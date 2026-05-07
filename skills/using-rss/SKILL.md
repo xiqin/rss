@@ -79,6 +79,6 @@ rss 使用 5 维审查替代通用 code review：
 
 rss 继承 superpowers 的插件基础设施，替换/增强核心 skills 为 rss 版本：
 
-- 增强：brainstorming、writing-plans、subagent-driven-development、code-review
-- 新增：index-update、init-project、rss-test
+- 增强：brainstorming、writing-plans、subagent-driven-development
+- 新增：index-update、init-project
 - 继承：TDD、debugging、verification、git-worktrees 等通用 skills

@@ -1,5 +1,7 @@
 # Claude Code 适配
 
+> 公共内容参见 [`common.md`](common.md)
+
 ## 安装
 
 ### 插件配置
@@ -51,81 +53,19 @@ rss 提供以下斜杠命令：
 - `/rss-init-project` — 项目初始化
 - `/rss-import-rules` — 导入项目自定义规则
 
-### 文件结构
-
-```
-项目根目录/
-├── .claude/
-│   ├── plugin.json              # 插件配置
-│   ├── memory/
-│   │   ├── constitution.md      # 项目宪章
-│   │   └── MEMORY.md            # 记忆文件
-│   ├── rules/
-│   │   └── project-structure.md # 工程结构约束
-│   ├── skills/
-│   │   └── <skill>/SKILL.md     # Skills
-│   ├── commands/
-│   │   └── <command>.md         # 命令定义
-│   ├── hooks/
-│   │   ├── hooks.json           # Hooks 配置
-│   │   └── session-start        # 会话开始钩子
-│   ├── templates/
-│   │   └── subagent-context.md  # 子 agent 上下文
-│   └── core/                    # 核心框架定义
-├── CLAUDE.md                    # 项目入口文档
-├── ENGINEERING-INDEX.md         # 工程索引
-└── specs/
-    └── <date+feature>/
-        ├── spec.md              # 需求规格
-        ├── plan.md              # 实现计划
-        ├── progress.md          # 进度追踪
-        └── test-report.md       # 测试报告
-```
-
-## 会话流程
-
-1. 用户打开 Claude Code
-2. Claude 加载 `CLAUDE.md`
-3. 执行 `hooks/session-start`
-4. 检查项目是否已初始化
-5. 如果未初始化，提示运行 `/rss-init-project`
-
 ## 自定义
 
 ### 项目级 Skills
 
-在 `.claude/skills/` 中创建项目专属 skill：
-
-```
-.claude/skills/
-  my-project-skill/
-    SKILL.md
-```
+参见 [common.md#项目级-skills](common.md#项目级-skills)
 
 ### 覆盖 rss Skills
 
-在 `.claude/skills/` 中创建同名 skill 目录覆盖 rss 默认：
-
-```
-.claude/skills/
-  writing-plans/
-    SKILL.md        # 覆盖 rss 默认的 writing-plans
-```
+参见 [common.md#覆盖-rss-skills](common.md#覆盖-rss-skills)
 
 ### 自定义 Hooks
 
-编辑 `hooks/hooks.json` 添加更多钩子：
-
-```json
-{
-  "sessionStart": {
-    "command": "hooks/session-start"
-  },
-  "preCommit": {
-    "command": "hooks/pre-commit"
-  }
-}
-```
+参见 [common.md#自定义-hooks](common.md#自定义-hooks)
 
 ## 调试
 
@@ -139,14 +79,4 @@ rss 提供以下斜杠命令：
 
 ### 常见问题
 
-**Skill 未触发**
-- 检查 SKILL.md 的 description 中是否包含正确的关键词
-- 确认文件路径正确
-
-**Hooks 未执行**
-- 检查 `hooks.json` 格式
-- 确认 `session-start` 文件有执行权限
-
-**命令未识别**
-- 检查命令文件是否在 `commands/` 目录
-- 确认文件名与命令名匹配
+参见 [common.md#常见问题](common.md#常见问题)

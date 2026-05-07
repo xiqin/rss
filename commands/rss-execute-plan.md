@@ -10,7 +10,7 @@
 
 ## 功能
 
-执行完整的 5 步流水线：
+执行后 3 步（git-worktree → subagent-dev → index-update）：
 
 1. git-worktree — 创建隔离分支
 2. subagent-driven-development — 派发 subagent 编码执行
