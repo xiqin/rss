@@ -8,13 +8,13 @@
 
 | 代码变更 | 需更新的节 | 更新方式 |
 |---------|-----------|---------|
-| `routers/` 新增/修改文件 | 完整路由表 | 添加/修改对应路由组的行 |
-| `controllers/` 新增 struct | 控制器签名 | 添加完整 struct + 方法签名块 |
-| `controllers/` 新增方法 | 控制器签名 | 在已有 struct 块中追加方法 |
-| `service/` 新增 struct | 服务层签名 | 添加完整 struct + 方法签名块 |
-| `service/` 新增方法 | 服务层签名 | 在已有 struct 块中追加 + 标注调用链 |
-| `models/` 新增文件 | 数据模型层 + 表名↔Model映射 | 添加签名块 + 映射行 |
-| `models/` 新增方法 | 数据模型层 | 在已有 Model 块中追加 |
+| 路由层目录新增/修改文件 | 完整路由表 | 添加/修改对应路由组的行 |
+| 接口层目录新增类/结构体 | 接口层签名 | 添加完整类 + 方法签名块 |
+| 接口层目录新增方法 | 接口层签名 | 在已有类块中追加方法 |
+| 业务逻辑层目录新增类/结构体 | 业务逻辑层签名 | 添加完整类 + 方法签名块 |
+| 业务逻辑层目录新增方法 | 业务逻辑层签名 | 在已有类块中追加 + 标注调用链 |
+| 数据模型层目录新增文件 | 数据模型层 + 表名↔模型映射 | 添加签名块 + 映射行 |
+| 数据模型层目录新增方法 | 数据模型层 | 在已有模型块中追加 |
 | 自动生成的 Model 重新生成 | 数据库表索引 | 检查是否有新表/删表 |
 | 新建 DDL | 数据库表索引 | 在对应前缀分组添加行 |
 | `middleware/` 新增/修改 | 中间件链 | 添加/修改表行 |
@@ -43,34 +43,14 @@
 
 ## 签名格式标准
 
-### 控制器签名格式
+> 签名格式由 init-project 根据项目语言生成。以下为通用描述，具体格式见 subagent-context.md。
 
-```go
-// <文件名>.go
-type XxxController struct { *repository.Repository }
-func NewXxxController(deps *repository.Repository) *XxxController
-func (c *XxxController) MethodName(ctx *gin.Context)
-```
+### 各层签名格式
 
-### 服务层签名格式
-
-```go
-// <文件名>.go
-type XxxService struct { *repository.CommonRepository }
-func NewXxxService(repo *repository.CommonRepository) *XxxService
-func (s *XxxService) MethodName(params...) (returns...)
-```
-
-### 模型层签名格式
-
-```go
-// <文件名>.go — 表：<table_name>
-type Xxx struct { raws.Xxx }
-func NewXxx(db *gorm.DB) *Xxx
-func (m *Xxx) GetByXxx(...) *raws.Xxx
-```
-
-### 数据库表格式
+- **接口层签名**：类/结构体 + 构造函数 + 所有公开方法（含参数和返回值类型）
+- **业务逻辑层签名**：类/结构体 + 构造函数 + 所有公开方法（标注调用链）
+- **数据模型层签名**：类/结构体 + 构造函数 + 查询方法
+- **数据库表格式**：
 
 ```markdown
 | 表名 | 用途 | 关键字段 |
@@ -81,10 +61,11 @@ func (m *Xxx) GetByXxx(...) *raws.Xxx
 ## 更新顺序
 
 1. **先检测** — 确认变更范围
-2. **先更新数据库表** — 其他层依赖表名
-3. **再更新 Model** — Model 依赖表
-4. **再更新 Service** — Service 调用 Model
-5. **再更新 Controller** — Controller 调用 Service
-6. **最后更新路由** — 路由注册 Controller
-7. **更新调用链** — 基于以上更新串联
-8. **更新 MEMORY/CLAUDE** — 按需
+2. **按依赖顺序更新**（从底层到上层）：
+   - 先更新底层数据源（数据库表等）
+   - 再更新数据模型层
+   - 再更新业务逻辑层
+   - 再更新接口层
+   - 最后更新路由层
+3. **更新调用链** — 基于以上更新串联
+4. **更新 MEMORY/CLAUDE** — 按需

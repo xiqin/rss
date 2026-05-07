@@ -53,21 +53,21 @@ description: >
 
 ### Step 3：按分层拆分 task
 
-**严格按以下顺序拆分，每层的 task 编号连续：**
+**读取 `.claude/rules/project-structure.md` 中定义的架构分层，按依赖顺序（底层→上层）拆分 task：**
 
-#### 层级 1：Model 层 task
-- 新建/修改业务 Model
-- Model 方法：GetByXxx、GetList、Create、UpdateByXxx、DeleteByXxx
+#### 层级 1：数据模型层 task
+- 新建/修改业务数据模型
+- 数据访问方法
 
-#### 层级 2：Service 层 task
-- 新建/修改 Service
-- 包含业务逻辑、校验、流程编排
+#### 层级 2：业务逻辑层 task
+- 新建/修改业务逻辑服务
+- 包含校验、流程编排
 
-#### 层级 3：Controller 层 task
-- 新建/修改 Controller
-- 只做参数绑定 + 调用 Service + 返回响应
+#### 层级 3：接口层 task
+- 新建/修改接口处理
+- 只做参数绑定 + 调用业务逻辑 + 返回响应
 
-#### 层级 4：Router 层 task
+#### 层级 4：路由层 task
 - 新建/修改路由
 - 按项目路由注册规范注册
 
@@ -83,27 +83,18 @@ description: >
 ```markdown
 ### Task N: <功能点名称>
 
-- **层级**: Model / Service / Controller / Router / Config
+- **层级**: 数据模型层 / 业务逻辑层 / 接口层 / 路由层 / 配置
 - **复杂度**: 简单 / 中等 / 复杂
 - **依赖**: Task X, Task Y（无则写"无"）
 - **涉及文件**:
   - 创建: `path/to/new/file.<ext>`
   - 修改: `path/to/existing/file.<ext>`（在具体位置添加方法）
 - **实现步骤**:
-  1. 在 `path/to/file.<ext>` 中创建结构体/类:
-     ```
-     // 具体代码示例，按项目语言编写，无占位符
-     ```
-  2. 添加方法:
-     ```
-     // 具体代码示例
-     ```
+  1. 在 `path/to/file.<ext>` 中创建结构体/类（按项目语言编写具体代码，无占位符）
+  2. 添加方法（按项目语言编写具体代码）
 - **单元测试**:
   - 测试文件: `path/to/file_test.<ext>`
-  - 测试用例:
-    ```
-    // 具体测试代码
-    ```
+  - 测试用例:（按项目语言编写具体测试代码）
 - **验证命令**:
   ```bash
   <TEST_CMD 对应的单文件测试命令>
@@ -117,13 +108,15 @@ description: >
 - [ ] 所有 task 的依赖关系无循环
 - [ ] 每个 task 可独立编译验证
 - [ ] 代码示例可直接复制运行（无占位符）
-- [ ] 分层顺序正确（Model → Service → Controller → Router）
-- [ ] 遵守编码红线（无 fmt.Println、无硬编码、无 SQL 拼接）
+- [ ] 分层顺序正确（按 project-structure.md 定义的依赖顺序，从底层到上层）
+- [ ] 遵守编码红线（读取 constitution.md，无违反）
 
 ## 编码红线（task 中绝对禁止）
 
-1. 在 Controller 中写业务逻辑
-2. 使用语言默认的调试打印（如 Go 的 `fmt.Println`、Python 的 `print()`、JS 的 `console.log`）——必须用项目日志组件
+**读取 `.claude/memory/constitution.md` 中的编码红线，以下为通用红线（项目宪章可能有额外条目）：**
+
+1. 在接口层中写业务逻辑
+2. 使用语言默认的调试打印——必须用项目日志组件
 3. 硬编码配置值（密码、密钥、URL）
 4. 手写 SQL 拼接（必须参数化）
 5. 修改自动生成的代码文件

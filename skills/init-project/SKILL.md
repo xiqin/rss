@@ -45,8 +45,8 @@ description: >
 
 | 检测项 | 方法 | 示例 |
 |--------|------|------|
-| 项目名称 | 目录名 / go module / package.json | wxServiceGo |
-| 项目描述 | README.md 首段 | 企微客服管理系统后端 |
+| 项目名称 | 目录名 / go module / package.json | my-project |
+| 项目描述 | README.md 首段 | 项目描述 |
 | 语言 | go.mod / package.json / requirements.txt / pom.xml | Go 1.24 |
 | 框架 | import 分析 | Gin 1.9 |
 | ORM | import 分析 | GORM + GORM Gen |
@@ -96,7 +96,7 @@ description: >
 
 ### Step 3: 提取目录结构
 
-分析项目目录结构，推断架构模式：
+分析项目目录结构，推断架构模式（以下为 Go 项目示例，实际按项目语言推断）：
 
 ```
 项目目录 → 架构分层映射
@@ -199,8 +199,8 @@ pkg/          → 公共工具包
 
 | 变量 | 来源 | 示例 |
 |------|------|------|
-| `{{PROJECT_NAME}}` | 目录名 / go module | wxServiceGo |
-| `{{PROJECT_DESC}}` | README / 用户输入 | 企微客服管理系统后端 |
+| `{{PROJECT_NAME}}` | 目录名 / go module | my-project |
+| `{{PROJECT_DESC}}` | README / 用户输入 | 项目描述 |
 | `{{LANGUAGE}}` | go.mod / package.json | Go 1.24 |
 | `{{WEB_FRAMEWORK}}` | import 分析 | Gin 1.9 |
 | `{{ORM}}` | import 分析 | GORM + GORM Gen |

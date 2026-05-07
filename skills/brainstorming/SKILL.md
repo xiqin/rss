@@ -78,7 +78,7 @@ description: >
 
 用户确认方案后，输出结构化需求文档到 `specs/<date+feature>/spec.md`。
 
-**文件名格式**：`<YYYY-MM-DD>+<功能名>`，如 `2026-04-26+passport-list`
+**文件名格式**：`<YYYY-MM-DD>+<功能名>`，如 `2026-04-26+user-management`
 
 spec.md 格式：
 
@@ -103,7 +103,7 @@ spec.md 格式：
 ### 3.1 <接口名>
 
 - **Method**: POST
-- **Path**: /backend/xxx/edit
+- **Path**: /api/xxx/edit（遵循项目路由分组规范）
 - **描述**: ...
 - **请求参数**:
 
@@ -111,15 +111,7 @@ spec.md 格式：
 |------|------|------|------|
 | name | string | 是 | 名称 |
 
-- **响应格式**:
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {}
-}
-```
+- **响应格式**:（遵循项目统一响应格式）
 
 ## 4. 数据模型
 

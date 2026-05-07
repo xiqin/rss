@@ -57,7 +57,7 @@ description: >
 
 ### 测试文件命名
 
-按项目语言的测试约定命名（如 Go 的 `_test.go`、Python 的 `test_*.py`、JS 的 `*.test.js`）。
+按项目语言的测试文件命名约定。
 
 ### 测试结构
 

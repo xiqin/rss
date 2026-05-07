@@ -53,18 +53,17 @@ description: >
 对照 `REFERENCE/update-checklist.md` 中的检查清单，逐一检查并更新。
 
 **更新顺序：**
-1. 先更新数据库表 — 其他层依赖表名
-2. 再更新 Model — Model 依赖表
-3. 再更新 Service — Service 调用 Model
-4. 再更新 Controller — Controller 调用 Service
-5. 最后更新路由 — 路由注册 Controller
+按项目架构分层的依赖顺序（从底层到上层），参考 `.claude/rules/project-structure.md` 中定义的分层：
+1. 先更新底层数据源（数据库表等）
+2. 再更新数据模型层
+3. 再更新业务逻辑层
+4. 再更新接口层
+5. 最后更新路由层
 6. 更新调用链 — 基于以上更新串联
 7. 更新中间件、定时任务、队列、公共包等
 
 **签名格式标准**（参考 `REFERENCE/update-checklist.md`）：
-- 控制器签名：struct + NewXxx + 所有方法
-- 服务层签名：struct + NewXxx + 所有方法（标注调用链）
-- 模型层签名：struct + NewXxx + 查询方法
+- 各层签名格式遵循项目语言的代码签名规范
 - 数据库表：表名 | 用途 | 关键字段
 
 ### Step 3: 更新 MEMORY.md

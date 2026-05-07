@@ -121,13 +121,13 @@ Task N ──→ implementer ──→ reviewer（spec + quality 合并）──
 ## Part 2：5 维质量审查
 
 ### 维度 1：架构合规性（BLOCKER）
-- Controller 是否包含业务逻辑
+- 是否遵循项目架构分层（从 subagent-context.md 读取）
 - 是否跨层调用
 - 依赖是否单向流动
 
 ### 维度 2：代码质量（BLOCKER）
 - 命名规范、错误处理、日志格式
-- 是否使用禁止的函数（如 fmt.Println）
+- 是否违反编码红线（从 subagent-context.md 读取）
 
 ### 维度 3：安全风险（BLOCKER）
 - SQL 注入、硬编码、权限校验、信息泄露
