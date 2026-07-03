@@ -3,6 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validateReportEvidence } from '../../../src/core/artifact-checker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const PLACEHOLDER_RE = /\b(TBD|TODO|implement later|fill in details)\b/i;
@@ -37,6 +38,10 @@ export function verifyArtifacts(options = {}) {
     }
     if (!/PASS|通过|WARN/i.test(report)) {
       warnings.push('test-report.md should include an explicit PASS/WARN conclusion');
+    }
+    if (/^\s*(?:verdict|结论)\s*[:：]\s*(?:PASS|通过)/mi.test(report)) {
+      const receipt = validateReportEvidence(specDir, report);
+      for (const error of receipt.errors) errors.push(`test-report.md evidence: ${error}`);
     }
   }
 

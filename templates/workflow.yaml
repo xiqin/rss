@@ -12,6 +12,7 @@
 #   outputs:      离开本阶段前必须产出的文件列表（inline list）
 #   requires:     进入本阶段前必须存在的文件/目录（尾 / 表示目录）
 #   gate_verdict: 离开本阶段前须读取该文件且 verdict===PASS
+#   evidence_required: PASS 时须校验落盘日志的 command/exit-code/path/sha256 收据
 
 # ─────────────────────────────────────────
 # 全局配置
@@ -60,6 +61,7 @@ pipelines:
         requires: [spec.md, plan.md, tasks/]
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
+        evidence_required: true
         description: "subagent 并行编码执行"
 
       - id: verification
@@ -68,6 +70,7 @@ pipelines:
         requires: [spec.md, test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
+        evidence_required: true
         description: "完成前验证：spec 覆盖 / 类型一致性 / 编译测试"
 
       - id: synced
@@ -97,6 +100,7 @@ pipelines:
         requires: [plan.md, tasks/]
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
+        evidence_required: true
         description: "执行修复"
 
       - id: verification
@@ -105,6 +109,7 @@ pipelines:
         requires: [test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
+        evidence_required: true
         description: "验证修复：回归测试 / 边界用例"
 
       - id: synced
@@ -127,6 +132,7 @@ pipelines:
         next: verification
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
+        evidence_required: true
         description: "执行热修复"
         config:
           max_retries: 1 # 热修复不允许无限重试，失败立即上报
@@ -135,6 +141,8 @@ pipelines:
         skill: loom-verification-before-completion
         requires: [test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
+        gate_verdict: verify-report.md
+        evidence_required: true
         description: "最小验证：编译通过 + 核心路径冒烟测试"
 
   # 重构 — 有 brainstorm，但跳过独立 worktree（在当前分支操作）
@@ -165,6 +173,7 @@ pipelines:
         requires: [plan.md, tasks/]
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
+        evidence_required: true
         description: "执行重构"
 
       - id: verification
@@ -173,6 +182,7 @@ pipelines:
         requires: [test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
+        evidence_required: true
         description: "验证：行为一致性 / 性能对比 / 类型检查"
 
       - id: synced
@@ -215,6 +225,8 @@ pipelines:
       - id: verification
         skill: loom-verification-before-completion
         outputs: [verify-report.md, handoffs/verification.json]
+        gate_verdict: verify-report.md
+        evidence_required: true
         description: "基础验证：lint / 编译"
 
   # 快速修复 — 最轻量流水线，适合单文件 bugfix、配置微调
@@ -229,6 +241,8 @@ pipelines:
       - id: verification
         skill: loom-verification-before-completion
         outputs: [verify-report.md, handoffs/verification.json]
+        gate_verdict: verify-report.md
+        evidence_required: true
         description: "最小验证：lint / 编译 / 相关测试"
 
   # QA 验收流水线 — 测试人员使用
@@ -259,6 +273,7 @@ pipelines:
         requires: [qa-cases.md]
         outputs: [qa-execution-report.md, manual-checklist.md, handoffs/qa-execution.json]
         gate_verdict: qa-execution-report.md
+        evidence_required: true
         description: "执行自动化测试，回写 last_run，生成手动测试 checklist"
 
       - id: qa-signoff
@@ -304,6 +319,7 @@ step_catalog:
     requires: [plan.md, tasks/]
     outputs: [test-report.md, handoffs/executing.json]
     gate_verdict: test-report.md
+    evidence_required: true
     description: "subagent 并行编码执行"
     mandatory: true
 
@@ -312,6 +328,7 @@ step_catalog:
     requires: [test-report.md]
     outputs: [verify-report.md, handoffs/verification.json]
     gate_verdict: verify-report.md
+    evidence_required: true
     description: "spec 覆盖 / 类型一致性 / 编译测试"
     mandatory: true
 

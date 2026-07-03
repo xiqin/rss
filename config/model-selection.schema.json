@@ -10,9 +10,9 @@
     {
       "id": "mechanical",
       "label": "机械实现任务",
-      "scope": "隔离函数、清晰规范、1-2 个文件",
+      "scope": "隔离函数、1-2 个文件、Requirement ID 与验收映射完整、上下文无 UNKNOWN",
       "model": "快速、便宜的模型",
-      "rationale": "当计划明确时，大多数实现任务都是机械的"
+      "rationale": "只有事实已落盘且不存在接口/安全判断时，才把任务视为机械实现"
     },
     {
       "id": "integration",
@@ -28,7 +28,8 @@
     }
   ],
   "signals": [
-    { "condition": "触及 1-2 个文件且有完整规范", "tier": "mechanical" },
+    { "condition": "触及 1-2 个文件、Requirement ID/验收映射完整、无 UNKNOWN、无公开接口或安全影响", "tier": "mechanical" },
+    { "condition": "任一关键事实为 UNKNOWN、handoff 指纹过期或源码与 handoff 冲突", "tier": "integration" },
     { "condition": "触及多个文件且有集成问题", "tier": "integration" },
     { "condition": "需要设计判断或广泛的代码库理解", "tier": "architecture" }
   ]

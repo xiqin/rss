@@ -40,6 +40,19 @@ function limitArray(items, limit) {
   };
 }
 
+function compactHandoff(handoff) {
+  if (!handoff) return null;
+  return {
+    id: handoff.stage || handoff.task_id || null,
+    stage: handoff.stage || null,
+    task_id: handoff.task_id || null,
+    status: handoff.status || null,
+    summary: handoff.summary || handoff.notes || handoff.description || null,
+    artifacts: handoff.artifacts || handoff.outputs || handoff.files || handoff.changed_files || [],
+    written_at: handoff.written_at || null
+  };
+}
+
 function summarizePipelineContext(ctx, { handoffLimit = DEFAULT_HANDOFF_LIMIT } = {}) {
   const handoffs = limitArray(ctx.handoffs_summary || [], handoffLimit);
   return {
@@ -526,7 +539,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
     case 'loom_update_task_state': {
       if (!specDir) return { error: 'No spec_dir' };
       const abs = safeResolveSpecDir(projectRoot, specDir);
-      const store = new PipelineStateStore(abs, { fs: fsImpl });
+      const store = new PipelineStateStore(abs, { fs: fsImpl, projectRoot });
       const patch = { status: args.status };
       if (args.blocker) patch.blocker = args.blocker;
       if (args.status === 'failed') {
@@ -543,7 +556,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
       if (args.stage && args.task_id) return { error: 'Use only one of stage or task_id' };
       const abs = safeResolveSpecDir(projectRoot, specDir);
       return await withSpecLock(abs, () => {
-        const store = new PipelineStateStore(abs, { fs: fsImpl });
+        const store = new PipelineStateStore(abs, { fs: fsImpl, projectRoot });
         const payload = {
           ...(args.data || {}),
           status: args.status || args.data?.status || 'done',
@@ -555,7 +568,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
           return {
             ok: true,
             path: `handoffs/${args.stage}.json`,
-            handoff: store.readHandoff(args.stage),
+            handoff: compactHandoff(store.readHandoff(args.stage)),
             next_required_action: 'compress closed-stage raw context before advancing or starting the next stage'
           };
         }
@@ -563,8 +576,8 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
         return {
           ok: true,
           path: `handoffs/${args.task_id}.json`,
-          handoff: store.readHandoff(args.task_id),
-          next_required_action: 'use this handoff as compact context for downstream tasks'
+          handoff: compactHandoff(store.readHandoff(args.task_id)),
+          next_required_action: 'use this compact handoff to locate artifacts, then verify signatures against current source'
         };
       }, fsImpl);
     }
@@ -581,7 +594,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
           return { error: `checkpoint stage "${args.stage}" does not match current stage "${initialCtx.current_stage}"` };
         }
 
-        const store = new PipelineStateStore(abs, { fs: fsImpl });
+        const store = new PipelineStateStore(abs, { fs: fsImpl, projectRoot });
         const payload = {
           ...(args.data || {}),
           status: args.status || args.data?.status || 'done',

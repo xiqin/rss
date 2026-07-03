@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } fro
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { PipelineEngine } from '../../src/core/pipeline-engine.js';
 import { PipelineStateStore } from '../../src/core/state-store.js';
 
@@ -25,6 +26,14 @@ function setupRealProject() {
 const write = (dir, file, body) => writeFileSync(join(dir, file), body, 'utf-8');
 const writeStageHandoff = (engine, stage, artifacts = []) => {
   engine.store.writeStageHandoff(stage, { status: 'done', summary: `${stage} complete`, artifacts });
+};
+const writePassingReport = (dir, file, command = 'npm test') => {
+  mkdirSync(join(dir, 'evidence'), { recursive: true });
+  const evidenceName = `${file}.log`;
+  const log = `${command}: passed\n`;
+  write(dir, `evidence/${evidenceName}`, log);
+  const hash = createHash('sha256').update(log).digest('hex');
+  write(dir, file, `verdict: PASS\nevidence-command: ${command}\nevidence-exit-code: 0\nevidence-file: evidence/${evidenceName}\nevidence-sha256: ${hash}`);
 };
 
 describe('feature pipeline end-to-end (real workflow.yaml)', () => {
@@ -54,12 +63,12 @@ describe('feature pipeline end-to-end (real workflow.yaml)', () => {
     expect(engine.advance()).toMatchObject({ ok: true, to: 'executing' });
 
     // executing → verification requires test-report PASS
-    write(specDir, 'test-report.md', 'ran suite\nverdict: PASS');
+    writePassingReport(specDir, 'test-report.md');
     writeStageHandoff(engine, 'executing', ['test-report.md']);
     expect(engine.advance()).toMatchObject({ ok: true, to: 'verification' });
 
     // verification → synced requires verify-report PASS
-    write(specDir, 'verify-report.md', 'all checks passed\nverdict: PASS');
+    writePassingReport(specDir, 'verify-report.md', 'npm run build');
     writeStageHandoff(engine, 'verification', ['verify-report.md']);
     expect(engine.advance()).toMatchObject({ ok: true, to: 'synced' });
 
@@ -84,7 +93,7 @@ describe('feature pipeline end-to-end (real workflow.yaml)', () => {
     engine.advance();
     engine.approve();
     engine.advance(); // executing
-    write(specDir, 'test-report.md', 'verdict: PASS');
+    writePassingReport(specDir, 'test-report.md');
     writeStageHandoff(engine, 'executing', ['test-report.md']);
     engine.advance(); // verification
     write(specDir, 'verify-report.md', 'verdict: FAIL');

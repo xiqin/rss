@@ -5,6 +5,8 @@ reads: []       # 此 task 只读依赖的文件/目录（不会写入）
                 # 例: [src/types/user.ts, config/]
 depends_on: []  # 前置 task（必须在这些 task 完成后才能执行）
                 # 例: [T1, T2]
+requirements: [] # 本 task 覆盖的 spec Requirement ID；不得为空
+                 # 例: [REQ-001, REQ-003]
 complexity: medium  # low | medium | high（影响模型选择策略）
 ---
 
@@ -35,6 +37,12 @@ complexity: medium  # low | medium | high（影响模型选择策略）
 - [ ] 步骤 1：<具体操作>
 - [ ] 步骤 2：<具体操作>
 - [ ] 步骤 3：<具体操作>
+
+## 验收映射
+
+| Requirement ID | 验收标准 | 代码位置 | 测试用例 |
+| -------------- | -------- | -------- | -------- |
+| REQ-001 | <从 spec 精确提取> | `<path>:<symbol>` | `<test name>` |
 
 ## TDD 步骤
 

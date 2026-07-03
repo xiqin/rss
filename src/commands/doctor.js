@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { getUserAdapter, USER_TOOL_IDS } from '../core/installer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -16,6 +17,12 @@ export function checkSubagentContextStale(loomDir) {
   if (!existsSync(ctxPath)) return { exists: false };
   const constPath = join(loomDir, 'rules', 'constitution.md');
   if (!existsSync(constPath)) return { exists: true, stale: false };
+  const context = readFileSync(ctxPath, 'utf-8');
+  const recorded = context.match(/constitution-sha256:\s*([a-f0-9]{64})/i)?.[1]?.toLowerCase();
+  if (recorded) {
+    const actual = createHash('sha256').update(readFileSync(constPath, 'utf-8')).digest('hex');
+    return { exists: true, stale: recorded !== actual };
+  }
   const stale = statSync(constPath).mtimeMs > statSync(ctxPath).mtimeMs;
   return { exists: true, stale };
 }

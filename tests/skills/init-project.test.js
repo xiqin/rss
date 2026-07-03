@@ -43,6 +43,11 @@ describe('loom-init-project script', () => {
     expect(constitution).toContain('## 架构模式');
     expect(constitution).toContain('## 目录结构');
     expect(constitution).not.toMatch(/\{\{[A-Z0-9_]+\}\}/);
+
+    const context = readFileSync(join(TEST_DIR, '.loom', 'contexts', 'subagent-context.md'), 'utf8');
+    expect(context).toMatch(/constitution-sha256: [a-f0-9]{64}/);
+    expect(context).toContain('Current source and command output');
+    expect(context).toContain('Handoffs (navigation hints only');
   });
 
   it('distributes cursor and copilot files when tools are requested', () => {

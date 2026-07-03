@@ -143,6 +143,20 @@ describe('PipelineStateStore', () => {
     expect(progress).toContain('plan.md, tasks/');
   });
 
+  it('detects a handoff whose compact facts changed after it was written', () => {
+    store.init('feature');
+    writeFileSync(join(dir, 'spec.md'), '# original spec', 'utf-8');
+    store.writeStageHandoff('brainstorming', {
+      status: 'done', summary: 'approved', artifacts: ['spec.md']
+    });
+    expect(store.findStaleHandoffs()).toEqual([]);
+
+    writeFileSync(join(dir, 'spec.md'), '# changed spec', 'utf-8');
+    expect(store.findStaleHandoffs()[0]).toMatchObject({
+      id: 'brainstorming', changes: expect.arrayContaining([{ path: 'spec.md', reason: 'changed' }])
+    });
+  });
+
   it('rejects invalid handoff statuses', () => {
     store.init('feature');
     expect(HANDOFF_STATUSES).toEqual(['done', 'partial', 'blocked', 'failed']);

@@ -84,7 +84,7 @@ loom tasks --spec-dir specs/<date+feature>
 }
 ```
 
-下游 task 的 subagent **派发前必须读取所有上游 handoff 文件**（来自 `depends_on` 中列出的 task），再开始实现，避免对上游接口的猜测性假设。
+下游 task 的 subagent **派发前必须读取上游 handoff 作为紧凑索引，并按 artifacts 定向核对当前源码**。handoff 不覆盖源码事实；自动保存的指纹过期时必须刷新 handoff。
 
 1. 读取 `specs/<date+feature>/plan.md` Task 概览和 `specs/<date+feature>/tasks/TN.md` 详细内容，创建任务追踪列表。
 2. 读取 `.loom/workflow.yaml` 的 `defaults`，获取 `max_retries` 和 `timeout_minutes`；当前 step 有 `config` 字段时以 step 级别为准。
@@ -155,6 +155,7 @@ loom tasks --spec-dir specs/<date+feature>
 
 - reviewer / test-reporter / verification 输出中的结构化修复指令
 - `.loom/contexts/subagent-context.md`
+- 原 task 的 Requirement ID 与对应验收标准（只传相关行，不传全文）
 
 不要在修复模式重新传递完整 task 和 spec 全文。
 
@@ -173,7 +174,7 @@ loom tasks --spec-dir specs/<date+feature>
 
 使用最强大的模型来处理每个角色，以节省成本并提高效率：
 
-**机械实现任务**（隔离函数、清晰规范、1-2 个文件）：使用快速、便宜的模型。当计划明确时，大多数实现任务都是机械的
+**机械实现任务**（隔离函数、1-2 个文件、Requirement ID 与验收映射完整、上下文无 UNKNOWN）：使用快速、便宜的模型。只有事实已落盘且不存在接口/安全判断时，才把任务视为机械实现
 
 **集成和判断任务**（多文件协调、模式匹配、调试）：使用标准模型
 
@@ -181,7 +182,8 @@ loom tasks --spec-dir specs/<date+feature>
 
 **任务复杂度信号：**
 
-- 触及 1-2 个文件且有完整规范 → 便宜模型
+- 触及 1-2 个文件、Requirement ID/验收映射完整、无 UNKNOWN、无公开接口或安全影响 → 便宜模型
+- 任一关键事实为 UNKNOWN、handoff 指纹过期或源码与 handoff 冲突 → 标准模型
 - 触及多个文件且有集成问题 → 标准模型
 - 需要设计判断或广泛的代码库理解 → 最强模型
 <!-- /loom:generate:model-selection -->

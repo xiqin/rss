@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { validatePlan } from '../../skills/loom-writing-plans/scripts/validate-plan.mjs';
 import { verifyArtifacts } from '../../skills/loom-verification-before-completion/scripts/verify-artifacts.mjs';
 import { validateIndex } from '../../skills/loom-index-update/scripts/validate-index.mjs';
@@ -15,6 +16,7 @@ describe('workflow helper scripts', () => {
   it('validates a complete plan with contiguous task files', () => {
     const specDir = join(TMP_ROOT, 'specs', 'feature');
     mkdirSync(join(specDir, 'tasks'), { recursive: true });
+    writeFileSync(join(specDir, 'spec.md'), '# Spec\n\n| Requirement ID | Acceptance |\n|---|---|\n| REQ-001 | works |\n');
     writeFileSync(join(specDir, 'plan.md'), `# Feature Plan
 
 ## Task Overview
@@ -54,7 +56,11 @@ T1 -> T2
     writeFileSync(join(specDir, 'spec.md'), '# Spec\n');
     writeFileSync(join(specDir, 'plan.md'), '# Plan\n');
     writeFileSync(join(specDir, 'progress.md'), 'Step 5 complete at 14:30\n');
-    writeFileSync(join(specDir, 'test-report.md'), 'Conclusion: PASS\n');
+    mkdirSync(join(specDir, 'evidence'), { recursive: true });
+    const log = '1 test passed\n';
+    writeFileSync(join(specDir, 'evidence', 'test.log'), log);
+    const hash = createHash('sha256').update(log).digest('hex');
+    writeFileSync(join(specDir, 'test-report.md'), `verdict: PASS\nevidence-command: npm test\nevidence-exit-code: 0\nevidence-file: evidence/test.log\nevidence-sha256: ${hash}\n`);
 
     const result = verifyArtifacts({ specDir });
     expect(result.errors).toEqual([]);
@@ -92,7 +98,14 @@ T1 -> T2
 });
 
 function writeTask(specDir, number, deps) {
-  writeFileSync(join(specDir, 'tasks', `T${number}.md`), `### Task ${number}: Implement slice
+  writeFileSync(join(specDir, 'tasks', `T${number}.md`), `---
+owns: [src/example-${number}.js]
+reads: []
+depends_on: []
+requirements: [REQ-001]
+complexity: low
+---
+### Task ${number}: Implement slice
 
 - **Complexity**: simple
 - **Dependencies**: ${deps}
@@ -104,5 +117,11 @@ function writeTask(specDir, number, deps) {
 - [ ] Step 2: implement code
 
 Run test for this task.
+
+## Acceptance Mapping
+
+| Requirement ID | Test |
+|---|---|
+| REQ-001 | example test |
 `);
 }

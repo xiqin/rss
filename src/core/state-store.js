@@ -9,8 +9,9 @@
 
 import { NodeFileSystem } from './fs-interface.js';
 import { escapeMarkdown } from './markdown.js';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { compareFingerprints, fingerprintDeclaredPaths } from './fingerprints.js';
 
 // ── 常量 ───────────────────────────────────────────────────────────────────
 
@@ -84,8 +85,9 @@ export class PipelineStateStore {
   /**
    * @param {string} specDir  绝对或相对路径，e.g. "specs/2026-05-27+user-auth"
    */
-  constructor(specDir, { fs } = {}) {
+  constructor(specDir, { fs, projectRoot } = {}) {
     this.specDir = specDir;
+    this.projectRoot = resolve(projectRoot || dirname(dirname(specDir)));
     this.statePath = join(specDir, 'pipeline.state.json');
     this.taskStatesDir = join(specDir, 'task-states');
     this.handoffsDir = join(specDir, 'handoffs');
@@ -244,9 +246,20 @@ export class PipelineStateStore {
     assertValidTaskId(taskId);
     assertValidHandoffStatus(handoff?.status);
     this.fs.mkdirSync(this.handoffsDir, { recursive: true });
+    const basisPaths = ['spec.md', 'plan.md'];
+    if (/^T\d+$/i.test(taskId)) basisPaths.push(`tasks/${taskId}.md`);
+    else if (taskId === 'planning' || taskId === 'executing') basisPaths.push('tasks/');
+    if (taskId === 'verification') basisPaths.push('test-report.md');
+    const artifacts = Array.isArray(handoff.artifacts)
+      ? handoff.artifacts.filter(path => !/^(?:handoffs|task-states)\/|^(?:progress\.md|pipeline\.state\.json)$/.test(path))
+      : [];
+    const fingerprintOptions = { specDir: this.specDir, projectRoot: this.projectRoot, fs: this.fs };
+
     writeJSON(join(this.handoffsDir, `${taskId}.json`), {
       ...handoff,
       task_id: taskId,
+      basis_fingerprints: fingerprintDeclaredPaths(basisPaths, fingerprintOptions),
+      artifact_fingerprints: fingerprintDeclaredPaths(artifacts, fingerprintOptions),
       written_at: now()
     }, this.fs);
     this._rebuildProgress();
@@ -273,6 +286,22 @@ export class PipelineStateStore {
         if (at !== bt) return at.localeCompare(bt);
         return String(a.stage || a.task_id || '').localeCompare(String(b.stage || b.task_id || ''));
       });
+  }
+
+  /** Return compact stale facts; hashes stay on disk and are not injected into prompts. */
+  findStaleHandoffs() {
+    const options = { specDir: this.specDir, projectRoot: this.projectRoot, fs: this.fs };
+    const stale = [];
+    for (const handoff of this.readAllHandoffs()) {
+      const changes = [
+        ...compareFingerprints(handoff.basis_fingerprints, options),
+        ...compareFingerprints(handoff.artifact_fingerprints, options)
+      ];
+      if (changes.length > 0) {
+        stale.push({ id: handoff.stage || handoff.task_id, changes });
+      }
+    }
+    return stale;
   }
 
   // ── Progress.md 增量更新 ───────────────────────────────────────────────────

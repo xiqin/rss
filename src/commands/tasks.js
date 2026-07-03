@@ -24,7 +24,7 @@ import { resolvePipelineDir } from '../core/spec-dir.js';
 // complexity: high
 // ---
 
-function parseTaskFrontmatter(content) {
+export function parseTaskFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
   const yaml = match[1];
@@ -97,7 +97,7 @@ function pathOverlaps(a, b) {
   return na === nb || na.startsWith(nb + '/') || nb.startsWith(na + '/');
 }
 
-function detectConflicts(tasks) {
+export function detectConflicts(tasks) {
   const conflicts = [];
   for (let i = 0; i < tasks.length; i++) {
     for (let j = i + 1; j < tasks.length; j++) {
@@ -107,6 +107,14 @@ function detectConflicts(tasks) {
       for (const oa of ta.owns) {
         for (const ob of tb.owns) {
           if (pathOverlaps(oa, ob)) overlaps.push(`"${oa}" ↔ "${ob}"`);
+        }
+        for (const rb of tb.reads) {
+          if (pathOverlaps(oa, rb)) overlaps.push(`write "${oa}" ↔ read "${rb}"`);
+        }
+      }
+      for (const ob of tb.owns) {
+        for (const ra of ta.reads) {
+          if (pathOverlaps(ob, ra)) overlaps.push(`write "${ob}" ↔ read "${ra}"`);
         }
       }
       if (overlaps.length > 0) {
@@ -119,7 +127,7 @@ function detectConflicts(tasks) {
 
 // ─── 批次调度（拓扑排序）───────────────────────────────────────────────────
 
-function buildBatches(tasks) {
+export function buildBatches(tasks) {
   // 先解析 depends_on（支持 T1 / T1.md 两种写法）
   const taskById = Object.fromEntries(tasks.map(t => [t.id, t]));
   const normalize = id => id.replace('.md', '').toUpperCase();
@@ -201,7 +209,11 @@ export default async function tasksCommand(options) {
   const allConflicts = detectConflicts(tasks);
 
   if (validateOnly) {
-    if (allConflicts.length > 0) {
+    const noOwns = tasks.filter(t => t.owns.length === 0);
+    if (allConflicts.length > 0 || noOwns.length > 0) {
+      if (noOwns.length > 0) {
+        console.error(`\n  ✗ ${noOwns.length} task(s) have no owns declaration: ${noOwns.map(t => t.id).join(', ')}`);
+      }
       console.error(`\n  ✗ ${allConflicts.length} file ownership conflict(s) detected:\n`);
       for (const c of allConflicts) {
         console.error(`    ${c.taskA} ↔ ${c.taskB}: ${c.overlaps.join(', ')}`);

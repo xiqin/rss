@@ -32,7 +32,7 @@
 如果 task 声明了依赖（如 "依赖: Task 1, Task 2"）：
 
 1. 检查前置 task 的输出代码是否已存在于项目中
-2. **读取前置 task 的 handoff 文件** `specs/<date+feature>/handoffs/TN.json`，了解其导出接口、方法签名和注意事项。handoff 文件是跨 task 上下文传递的唯一可信来源，优先于对源码的推断。
+2. **读取前置 task 的 handoff 文件** `specs/<date+feature>/handoffs/TN.json` 作为导航索引，再打开其 artifacts 对应源码核对导出接口和签名。可信度顺序是：当前源码/命令输出 > 已批准 spec > handoff。handoff 与源码冲突时返回 NEEDS_CONTEXT，禁止沿用 handoff 中的猜测。
 3. 如果前置代码不存在或未完成，报告 **BLOCKED** 并说明缺少哪个 task 的输出
 4. 如果前置代码已存在，基于它继续实现，不要重复创建已有代码
 5. 如果发现前置代码有问题，报告中注明但不擅自修改，由协调者决定
@@ -44,10 +44,11 @@
 **首次实现模式**：
 
 1. 严格按 task 中的实现步骤编写代码
-2. 编写对应的单元测试文件，必须持久化到项目代码库的标准测试目录（如 `tests/`、`__tests__/`、`src/**/__tests__/` 等项目约定目录），不得作为临时验证后删除
-3. 根据上方项目约束中的构建和测试命令执行（BUILD_CMD、VET_CMD、TEST_CMD 已在 subagent-context.md 模板中渲染为实际命令）
-4. 遵循项目编码红线（从 subagent-context.md 中读取）
-5. 遵循项目架构分层（从 subagent-context.md 中读取），不跨层写逻辑
+2. 只实现 task frontmatter 中列出的 Requirement ID；逐项核对“验收映射”。若缺失映射，返回 NEEDS_CONTEXT。
+3. 编写对应的单元测试文件，必须持久化到项目代码库的标准测试目录（如 `tests/`、`__tests__/`、`src/**/__tests__/` 等项目约定目录），不得作为临时验证后删除
+4. 根据上方项目约束中的构建和测试命令执行；命令为 UNKNOWN 时先检查项目配置，不得猜测
+5. 遵循项目编码红线（从 subagent-context.md 中读取）
+6. 遵循项目架构分层（从 subagent-context.md 中读取），不跨层写逻辑
 
 **修复模式**：
 
@@ -106,8 +107,8 @@
 **首次实现模式**：
 
 1. 列出所有创建/修改的文件路径
-2. 对每个文件附上完整代码
-3. 说明每个文件的作用和与 task 步骤的对应关系
+2. 不在消息中重复完整代码；代码以工作区文件为准，只报告符号名和关键变更，减少 token 与副本漂移
+3. 说明每个文件的作用和与 Requirement ID 的对应关系
 4. **生成 handoff 文件** `specs/<date+feature>/handoffs/<task-id>.json`，格式：
    ```json
    {
@@ -123,6 +124,7 @@
        }
      ],
      "breaking_changes": [],
+     "requirements_verified": ["REQ-001"],
      "notes": "<需要告知下游 task 的关键信息>"
    }
    ```

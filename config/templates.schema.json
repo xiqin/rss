@@ -74,19 +74,8 @@
       "id": "subagent-context",
       "sourceFile": "templates/subagent-context.md",
       "outputPath": ".loom/contexts/subagent-context.md",
-      "description": "Subagent 隔离派发时注入的项目约束上下文",
-      "requiredVariables": [
-        "ARCH_PATTERN",
-        "CODING_REDLINES",
-        "TECH_STACK",
-        "ERROR_PATTERN",
-        "RESPONSE_PATTERN",
-        "LOGGING_PATTERN",
-        "DI_PATTERN",
-        "TEST_PATTERN",
-        "UNIT_TEST_DIR",
-        "INTEGRATION_TEST_DIR"
-      ],
+      "description": "Subagent 紧凑事实上下文的格式与可信度说明；实际文件由 init-project 直接生成",
+      "requiredVariables": [],
       "optionalVariables": []
     }
   ]

@@ -15,6 +15,11 @@ export function validatePlan(options = {}) {
   const errors = [];
   const warnings = [];
   const taskFiles = [];
+  const specPath = join(specDir, 'spec.md');
+  const specRequirementIds = existsSync(specPath)
+    ? new Set([...readFileSync(specPath, 'utf8').matchAll(/\bREQ-\d{3,}\b/g)].map(match => match[0]))
+    : new Set();
+  const mappedRequirementIds = new Set();
 
   if (!existsSync(planPath)) {
     errors.push(`Missing plan file: ${formatPath(specDir, planPath)}`);
@@ -57,16 +62,24 @@ export function validatePlan(options = {}) {
     const name = basename(taskFile);
     const content = readFileSync(taskFile, 'utf8');
     checkNoPlaceholders(`tasks/${name}`, content, errors);
-    checkTaskFile(name, content, errors);
+    checkTaskFile(name, content, errors, specRequirementIds, mappedRequirementIds);
     if (planTaskRefs.size > 0 && !planTaskRefs.has(name.toUpperCase())) {
       errors.push(`plan.md Task overview does not reference tasks/${name}`);
     }
   }
 
+  if (specRequirementIds.size > 0) {
+    for (const id of specRequirementIds) {
+      if (!mappedRequirementIds.has(id)) errors.push(`spec requirement ${id} is not mapped to any task`);
+    }
+  } else {
+    warnings.push('spec.md has no stable Requirement IDs (expected REQ-001 style IDs)');
+  }
+
   return { ok: errors.length === 0, errors, warnings, planPath, tasksDir, taskFiles };
 }
 
-function checkTaskFile(name, content, errors) {
+function checkTaskFile(name, content, errors, specRequirementIds, mappedRequirementIds) {
   const required = [
     [/Task\s+\d+|###\s*Task/i, 'task heading'],
     [/复杂度|Complexity/i, 'complexity'],
@@ -74,12 +87,31 @@ function checkTaskFile(name, content, errors) {
     [/涉及文件|Files/i, 'affected files'],
     [/- \[ \]/, 'checklist steps'],
     [/测试|test/i, 'test instructions'],
+    [/验收映射|Acceptance Mapping/i, 'acceptance mapping'],
   ];
 
   for (const [pattern, label] of required) {
     if (!pattern.test(content)) {
       errors.push(`tasks/${name} missing ${label}`);
     }
+  }
+
+
+  const frontmatter = content.match(/^---\s*\n([\s\S]*?)\n---/m)?.[1];
+  if (!frontmatter) {
+    errors.push(`tasks/${name} missing YAML frontmatter`);
+    return;
+  }
+  for (const key of ['owns', 'reads', 'depends_on', 'requirements', 'complexity']) {
+    if (!new RegExp(`^${key}\\s*:`, 'm').test(frontmatter)) errors.push(`tasks/${name} missing frontmatter field ${key}`);
+  }
+  const requirementList = frontmatter.match(/^requirements\s*:\s*\[([^\]]*)\]/m)?.[1]
+    ?.split(',').map(item => item.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean) || [];
+  if (requirementList.length === 0) errors.push(`tasks/${name} requirements must not be empty`);
+  for (const id of requirementList) {
+    mappedRequirementIds.add(id);
+    if (!/^REQ-\d{3,}$/.test(id)) errors.push(`tasks/${name} has invalid requirement id ${id}`);
+    else if (specRequirementIds.size > 0 && !specRequirementIds.has(id)) errors.push(`tasks/${name} references unknown spec requirement ${id}`);
   }
 }
 

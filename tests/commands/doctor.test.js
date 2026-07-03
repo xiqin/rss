@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { checkSubagentContextStale } from '../../src/commands/doctor.js';
 
 const TEST_DIR = join(import.meta.dirname, '__test_doctor__');
@@ -129,5 +130,19 @@ describe('checkSubagentContextStale', () => {
     const loomDir = join(TEST_DIR, '.loom');
     seed(loomDir, { constitution: false });
     expect(checkSubagentContextStale(loomDir)).toEqual({ exists: true, stale: false });
+  });
+
+  it('uses the embedded constitution hash instead of timestamp ordering', () => {
+    const loomDir = join(TEST_DIR, '.loom-hash');
+    mkdirSync(join(loomDir, 'rules'), { recursive: true });
+    mkdirSync(join(loomDir, 'contexts'), { recursive: true });
+    const constitution = '# rules\n';
+    const hash = createHash('sha256').update(constitution).digest('hex');
+    writeFileSync(join(loomDir, 'rules', 'constitution.md'), constitution);
+    writeFileSync(join(loomDir, 'contexts', 'subagent-context.md'), `constitution-sha256: ${hash}\n`);
+    expect(checkSubagentContextStale(loomDir).stale).toBe(false);
+
+    writeFileSync(join(loomDir, 'rules', 'constitution.md'), '# changed rules\n');
+    expect(checkSubagentContextStale(loomDir).stale).toBe(true);
   });
 });

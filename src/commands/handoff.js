@@ -74,7 +74,7 @@ export default async function handoff(action, options) {
     process.exitCode = 1;
     return;
   }
-  const store = new PipelineStateStore(absSpecDir);
+  const store = new PipelineStateStore(absSpecDir, { projectRoot: cwd });
   const lock = new SpecLock(absSpecDir);
 
   await withWriteLock(lock, options, () => {

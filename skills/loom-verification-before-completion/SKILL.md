@@ -42,6 +42,8 @@ node <skill-dir>/scripts/verify-artifacts.mjs --spec-dir specs/<date+feature>
 7. 输出 `specs/<date+feature>/verify-report.md`。
 8. 写入 `specs/<date+feature>/handoffs/verification.json`，摘要说明验证结论、证据命令、关键产物和剩余风险。
 
+构建/检查的长输出保存到 `specs/<date+feature>/evidence/verification.log`；报告只保留 command、exit code、相对路径和 SHA-256。这样可验证且不占用后续上下文 token。
+
 报告模板见：
 
 - `assets/verify-report-template.md`

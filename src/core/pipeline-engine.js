@@ -172,7 +172,7 @@ export class PipelineEngine {
     this.projectRoot = resolve(projectRoot);
     this.specDir = resolve(specDir);
     this.fs = fs || new NodeFileSystem();
-    this.store = new PipelineStateStore(this.specDir, { fs: this.fs });
+    this.store = new PipelineStateStore(this.specDir, { fs: this.fs, projectRoot: this.projectRoot });
     this.lock = new SpecLock(this.specDir, { fs: this.fs });
     this.workflow = loadWorkflow(this.projectRoot, this.fs, { requirePipelines });
   }
@@ -276,6 +276,14 @@ export class PipelineEngine {
       return { ok: false, error: 'Pipeline is in failed state. Use: loom run --recover <stage>', hint: '执行 loom run --spec-dir <spec目录> --recover <阶段名> 从失败恢复' };
     }
 
+    const staleHandoffs = this.store.findStaleHandoffs();
+    if (staleHandoffs.length > 0) {
+      const details = staleHandoffs
+        .map(h => `${h.id}: ${h.changes.map(c => `${c.path} ${c.reason}`).join(', ')}`)
+        .join('; ');
+      return { ok: false, error: `Stale handoff detected: ${details}`, hint: '相关事实已变化；重新读取源码/规格并刷新对应 handoff，无需恢复原始长对话。' };
+    }
+
     // 如果当前是 gate，必须由用户确认（不能自动跳过）
     if (this.isGate(current)) {
       return { ok: false, error: `Stage "${current}" is a human-approval gate. Use: loom run --approve`, hint: '执行 loom run --spec-dir <spec目录> --approve 通过审批门禁' };
@@ -294,8 +302,8 @@ export class PipelineEngine {
 
     // 声明式 verdict 门禁（gate_verdict 在当前 step 声明）
     if (currentStep?.gate_verdict) {
-      if (!isReportPassing(this.specDir, currentStep.gate_verdict, this.fs)) {
-        return { ok: false, error: `${currentStep.gate_verdict} does not contain PASS verdict. Fix before advancing.`, hint: `在 ${currentStep.gate_verdict} 中添加 PASS 判定后再推进` };
+      if (!isReportPassing(this.specDir, currentStep.gate_verdict, this.fs, { requireEvidence: currentStep.evidence_required === true })) {
+        return { ok: false, error: `${currentStep.gate_verdict} lacks a valid PASS verdict or evidence receipt.`, hint: `确认报告为 PASS；若本阶段要求证据，还需提供 evidence-command / exit-code / file / sha256，且日志哈希必须匹配。` };
       }
     }
 
@@ -326,6 +334,10 @@ export class PipelineEngine {
 
     if (!this.isGate(state.current_stage)) {
       return { ok: false, error: `Stage "${state.current_stage}" is not a gate. No approval needed.`, hint: '当前阶段不是审批门禁，可以直接推进' };
+    }
+    const staleHandoffs = this.store.findStaleHandoffs();
+    if (staleHandoffs.length > 0) {
+      return { ok: false, error: 'Cannot approve: an upstream handoff is stale', stale_handoffs: staleHandoffs, hint: '刷新受影响的 spec/plan handoff 后再审批。' };
     }
 
     const next = this.nextStep();
@@ -394,6 +406,7 @@ export class PipelineEngine {
         requires: currentStep.requires || [],
         outputs: currentStep.outputs || [],
         gate_verdict: currentStep.gate_verdict || null,
+        evidence_required: currentStep.evidence_required === true,
         gate: currentStep.gate || null
       } : null,
       is_gate: this.isGate(),
@@ -414,7 +427,7 @@ export class PipelineEngine {
         compress_after_stage: true,
         mandatory_before_next_stage: true,
         write_stage_handoff: `handoffs/${state.current_stage}.json`,
-        guidance: '阶段结束后必须先写 handoff，再压缩该阶段原始讨论、搜索输出、中间推理和大段日志，然后才进入下一阶段。保留 spec/plan/tasks/reports/state/progress/handoffs；下一阶段先读 progress.md 的 Handoffs 摘要，再按需读取 handoffs/<stage>.json。'
+        guidance: '阶段结束后必须先写 handoff（自动保存输入/产物指纹），再压缩原始讨论和长日志。handoff 仅作导航，源码、规格和可校验证据优先；下一阶段按 requirement id 与变更路径定向读取。'
       },
       tasks_summary: {
         total: tasks.length,

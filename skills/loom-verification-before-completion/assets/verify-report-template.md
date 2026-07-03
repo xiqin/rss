@@ -14,4 +14,17 @@
 | 类型一致性 | ✅ | 类型匹配 |
 | 最终一致性核验 | ✅ | spec 功能全覆盖 |
 
-**结论：** ✅ 可以提交
+### Requirement Coverage
+
+| Requirement ID | 代码位置 | 测试证据 | 状态 |
+| -------------- | -------- | -------- | ---- |
+| REQ-001 | `path:symbol` | `test name` | PASS |
+
+### Evidence Receipt
+
+- evidence-command: `<实际执行的构建/检查命令>`
+- evidence-exit-code: `0`
+- evidence-file: `evidence/verification.log`
+- evidence-sha256: `<64位 SHA-256>`
+
+verdict: PASS

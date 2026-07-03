@@ -7,7 +7,8 @@
  */
 
 import { NodeFileSystem } from './fs-interface.js';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+import { sha256File } from './fingerprints.js';
 
 // 占位符标记：大写形式，区分大小写，避免误伤正文 "todo list" 这类普通词
 const PLACEHOLDER_MARKER_RE = /\b(TBD|TODO|FIXME|XXX)\b/;
@@ -72,16 +73,53 @@ export function checkStageOutputs(specDir, outputs, fs = new NodeFileSystem()) {
  * 通用 verdict 检查：读指定报告文件，verdict===PASS 则通过
  * @param {string} filename - 相对 specDir 的文件名
  */
-export function isReportPassing(specDir, filename, fs = new NodeFileSystem()) {
+export function isReportPassing(specDir, filename, fs = new NodeFileSystem(), options = {}) {
   const path = join(specDir, filename);
   if (!fs.existsSync(path)) return false;
   const content = fs.readFileSync(path, 'utf-8');
   const verdict = parseVerdict(content);
-  if (verdict) return verdict === 'PASS';
+  if (verdict) {
+    if (verdict !== 'PASS') return false;
+    return !options.requireEvidence || validateReportEvidence(specDir, content, fs).ok;
+  }
   // fallback 启发式（无显式裁定时保守判断）
   const hasFail = /\bFAIL\b|失败|不通过|\bBLOCKER\b/.test(content);
   const hasPass = /\bPASS\b|通过|all checks passed/i.test(content);
-  return hasPass && !hasFail;
+  if (!hasPass || hasFail) return false;
+  return !options.requireEvidence || validateReportEvidence(specDir, content, fs).ok;
+}
+
+/**
+ * Validate a compact evidence receipt embedded in a report.
+ * Raw command output remains on disk, keeping prompts small while preventing a bare PASS.
+ */
+export function validateReportEvidence(specDir, content, fs = new NodeFileSystem()) {
+  const field = name => content.match(new RegExp(`^\\s*(?:[-*]\\s*)?${name}\\s*:\\s*(.+?)\\s*$`, 'mi'))?.[1]?.replace(/^`|`$/g, '');
+  const command = field('evidence-command');
+  const exitCode = field('evidence-exit-code');
+  const evidenceFile = field('evidence-file');
+  const expectedHash = field('evidence-sha256')?.toLowerCase();
+  const errors = [];
+
+  if (!command) errors.push('missing evidence-command');
+  if (exitCode !== '0') errors.push('evidence-exit-code must be 0');
+  if (!evidenceFile) errors.push('missing evidence-file');
+  if (!/^[a-f0-9]{64}$/.test(expectedHash || '')) errors.push('invalid evidence-sha256');
+
+  let actualHash = null;
+  if (evidenceFile) {
+    const candidate = resolve(specDir, evidenceFile);
+    const rel = relative(resolve(specDir), candidate);
+    if (isAbsolute(evidenceFile) || rel.startsWith('..') || isAbsolute(rel)) {
+      errors.push('evidence-file escapes spec directory');
+    } else {
+      actualHash = sha256File(candidate, fs);
+      if (!actualHash) errors.push('evidence-file missing');
+      else if (expectedHash && actualHash !== expectedHash) errors.push('evidence-sha256 mismatch');
+    }
+  }
+
+  return { ok: errors.length === 0, errors, command, exitCode, evidenceFile, actualHash };
 }
 
 /**

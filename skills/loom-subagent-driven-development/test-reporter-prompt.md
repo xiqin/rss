@@ -15,6 +15,8 @@
 - 项目测试命令的完整输出
 - 编译和静态分析的输出
 
+长命令输出不要放进 prompt 或报告正文。保存到 `specs/<date+feature>/evidence/test.log`，报告只记录命令、退出码和文件 SHA-256。
+
 ## 执行步骤（必须按顺序执行）
 
 ### 1. 编写集成测试
@@ -110,7 +112,18 @@
 - **全部 PASS** → 通过，可以进入下一步
 - **存在 FAIL** → 不通过，需要修复
 - **存在 WARN** → 警告，可选择跳过或修复
+
+## Evidence Receipt
+
+- evidence-command: `<实际执行的完整测试命令>`
+- evidence-exit-code: `0`
+- evidence-file: `evidence/test.log`
+- evidence-sha256: `<64位 SHA-256>`
+
+verdict: PASS
 ```
+
+只有 evidence 文件真实存在、哈希匹配且退出码为 0 时才能写 `verdict: PASS`。失败时写 `verdict: FAIL`。
 
 ## 修复指令输出（仅存在 FAIL 时必须输出）
 

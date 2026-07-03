@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { PipelineEngine } from '../../src/core/pipeline-engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,13 @@ function setupQaProject() {
 const write = (dir, file, body) => writeFileSync(join(dir, file), body, 'utf-8');
 const handoff = (engine, stage, artifacts = []) => {
   engine.store.writeStageHandoff(stage, { status: 'done', summary: `${stage} done`, artifacts });
+};
+const writePassingReport = (dir, file, command = 'npm test') => {
+  mkdirSync(join(dir, 'evidence'), { recursive: true });
+  const log = `${command}: passed\n`;
+  write(dir, 'evidence/qa.log', log);
+  const hash = createHash('sha256').update(log).digest('hex');
+  write(dir, file, `verdict: PASS\nevidence-command: ${command}\nevidence-exit-code: 0\nevidence-file: evidence/qa.log\nevidence-sha256: ${hash}`);
 };
 
 describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
@@ -49,7 +57,7 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
     expect(engine.approve()).toMatchObject({ ok: true, to: 'qa-execution' });
 
     // qa-execution → qa-signoff：需 qa-execution-report.md(PASS) + manual-checklist.md
-    write(qaDir, 'qa-execution-report.md', '自动化全通过\nverdict: PASS');
+    writePassingReport(qaDir, 'qa-execution-report.md');
     write(qaDir, 'manual-checklist.md', '- [x] TC-auth-006 UI 验证');
     handoff(engine, 'qa-execution', ['qa-execution-report.md', 'manual-checklist.md']);
     expect(engine.advance()).toMatchObject({ ok: true, to: 'qa-signoff' });

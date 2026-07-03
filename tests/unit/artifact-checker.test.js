@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import {
-  parseVerdict, isReportPassing,
+  parseVerdict, isReportPassing, validateReportEvidence,
   checkStageOutputs, inferStageFromArtifacts
 } from '../../src/core/artifact-checker.js';
 
@@ -22,6 +23,23 @@ describe('parseVerdict', () => {
   });
   it('ignores the word FAIL inside prose (structured field only)', () => {
     expect(parseVerdict('We must ensure tests never FAIL.\nverdict: PASS')).toBe('PASS');
+  });
+});
+
+describe('evidence receipts', () => {
+  it('requires the on-disk log hash to match', () => {
+    const dir = tmp();
+    mkdirSync(join(dir, 'evidence'), { recursive: true });
+    const log = 'tests passed\n';
+    write(dir, 'evidence/test.log', log);
+    const hash = createHash('sha256').update(log).digest('hex');
+    const report = `verdict: PASS\nevidence-command: npm test\nevidence-exit-code: 0\nevidence-file: evidence/test.log\nevidence-sha256: ${hash}`;
+    write(dir, 'test-report.md', report);
+
+    expect(validateReportEvidence(dir, report).ok).toBe(true);
+    expect(isReportPassing(dir, 'test-report.md', undefined, { requireEvidence: true })).toBe(true);
+    write(dir, 'evidence/test.log', 'changed');
+    expect(isReportPassing(dir, 'test-report.md', undefined, { requireEvidence: true })).toBe(false);
   });
 });
 

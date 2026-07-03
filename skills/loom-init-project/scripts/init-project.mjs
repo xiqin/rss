@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -86,10 +87,12 @@ export function initProject(options = {}) {
 
   // dev 角色：工程上下文（宪章 / subagent 上下文）；图索引仅使用 codegraph。
   if (roles.has('dev')) {
-    writeRendered(templateDir, 'constitution.md', join(cwd, '.loom', 'rules', 'constitution.md'), variables, result, force);
+    const constitutionPath = join(cwd, '.loom', 'rules', 'constitution.md');
+    writeRendered(templateDir, 'constitution.md', constitutionPath, variables, result, force);
+    const constitution = readTextIfExists(constitutionPath) || '';
     writeFile(
       join(cwd, '.loom', 'contexts', 'subagent-context.md'),
-      renderSubagentContext(variables),
+      renderSubagentContext(variables, constitution),
       result,
       force
     );
@@ -167,6 +170,10 @@ function analyzeProject(root) {
     packageJson: pkg,
     tech,
     directoryTree: buildDirectoryTree(root),
+    factSources: [
+      'package.json', 'go.mod', 'pyproject.toml', 'requirements.txt',
+      'Cargo.toml', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'tsconfig.json'
+    ].filter(name => existsSync(join(root, name))),
   };
 }
 
@@ -315,6 +322,7 @@ function buildVariables(facts) {
     CODEGEN_PRINCIPLE: '生成物可追踪',
     CODEGEN_DESC: '生成代码必须有来源、命令和再生成方式。',
     CODING_REDLINES: '- [TODO] 补充项目禁止事项、兼容性边界和安全红线。',
+    FACT_SOURCES: facts.factSources.join(', ') || 'none (inspect source before implementation)',
   };
 }
 
@@ -447,8 +455,11 @@ function renderCursorRule(wrapper) {
   return `---\ndescription: "loom project entry. Read .loom source files before coding."\nalwaysApply: true\n---\n\n${wrapper}`;
 }
 
-function renderSubagentContext(variables) {
-  return `# Subagent Context\n\n> 本文件由 loom init-project 自动生成，是从 .loom/rules/constitution.md 派生的精简上下文。给子 agent 派发任务时，优先附上本文件摘要；不要手动维护长期规则。\n\n## Project\n\n- Name: ${variables.PROJECT_NAME}\n- Stack: ${variables.TECH_STACK_SUMMARY}\n- Architecture: ${variables.ARCH_PATTERN}\n- Build: ${variables.BUILD_CMD}\n- Check: ${variables.VET_CMD}\n- Test: ${variables.TEST_CMD}\n\n## Boundaries\n\n- Follow .loom/rules/constitution.md.\n- Keep changes scoped to the assigned task.\n- Report changed files, verification commands, and unresolved risks.\n`;
+function renderSubagentContext(variables, constitution = '') {
+  const grounded = value => String(value || '')
+    .replace(/^\[TODO:\s*(.+?)\]$/, 'UNKNOWN ($1; inspect project source before use)');
+  const constitutionHash = createHash('sha256').update(constitution).digest('hex');
+  return `# Subagent Context\n\n> Compact, generated grounding context. Keep this short; read source only for the requirement and files currently in scope.\n> constitution-sha256: ${constitutionHash}\n\n## Verified project facts\n\n- Name: ${grounded(variables.PROJECT_NAME)}\n- Stack: ${grounded(variables.TECH_STACK_SUMMARY)}\n- Architecture hint: ${grounded(variables.ARCH_PATTERN)} (directory-name inference only; verify against source)\n- Build: ${grounded(variables.BUILD_CMD)}\n- Check: ${grounded(variables.VET_CMD)}\n- Test: ${grounded(variables.TEST_CMD)}\n- Fact sources: ${variables.FACT_SOURCES}\n\n## Grounding priority\n\n1. Current source and command output\n2. Approved spec requirement IDs and constitution\n3. Handoffs (navigation hints only; verify signatures against source)\n\nIf a needed fact is UNKNOWN or conflicts with source, return NEEDS_CONTEXT instead of inventing it.\n\n## Boundaries\n\n- Follow .loom/rules/constitution.md.\n- Keep changes scoped to declared requirement IDs and owned files.\n- Report changed files, verification receipts, and unresolved risks.\n`;
 }
 
 function renderMemoryStore(variables) {
