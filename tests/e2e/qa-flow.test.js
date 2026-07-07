@@ -45,12 +45,12 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
     // qa-analysis → qa-design：需要 qa-plan.md
     write(qaDir, 'qa-plan.md', '# QA 测试矩阵\n覆盖用户认证功能');
     handoff(engine, 'qa-analysis', ['qa-plan.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'qa-design' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'qa-design' });
 
     // qa-design → qa-approved：需要 qa-plan.md（requires）+ qa-cases.md（outputs）
     write(qaDir, 'qa-cases.md', '# 用例清单\nTC-auth-001 正常登录');
     handoff(engine, 'qa-design', ['qa-cases.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'qa-approved' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'qa-approved' });
 
     // qa-approved 是 gate，不能自动推进
     expect(engine.advance().ok).toBe(false);
@@ -60,7 +60,7 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
     writePassingReport(qaDir, 'qa-execution-report.md');
     write(qaDir, 'manual-checklist.md', '- [x] TC-auth-006 UI 验证');
     handoff(engine, 'qa-execution', ['qa-execution-report.md', 'manual-checklist.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'qa-signoff' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'qa-signoff' });
 
     // qa-signoff 是 gate
     expect(engine.advance().ok).toBe(false);
@@ -83,10 +83,10 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
 
     write(qaDir, 'qa-plan.md', '# plan');
     handoff(engine, 'qa-analysis', ['qa-plan.md']);
-    engine.advance();
+    engine.advance({ compressionConfirmed: true });
     write(qaDir, 'qa-cases.md', '# cases');
     handoff(engine, 'qa-design', ['qa-cases.md']);
-    engine.advance(); // → qa-approved
+    engine.advance({ compressionConfirmed: true }); // → qa-approved
     engine.approve(); // → qa-execution
 
     write(qaDir, 'qa-execution-report.md', 'verdict: FAIL\n发现回归失败');
@@ -115,7 +115,7 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
     // qa 推进不影响 feature
     write(qaDir, 'qa-plan.md', '# plan');
     handoff(qaEngine, 'qa-analysis', ['qa-plan.md']);
-    qaEngine.advance();
+    qaEngine.advance({ compressionConfirmed: true });
     expect(featureEngine.currentStage()).toBe('brainstorming');
   });
 });

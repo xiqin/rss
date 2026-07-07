@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadWorkflow, PipelineEngine } from '../../src/core/pipeline-engine.js';
@@ -136,7 +136,13 @@ pipelines:
     expect(blocked.error).toContain('handoffs/planning.json');
 
     handoffEngine.store.writeStageHandoff('planning', { status: 'done', summary: 'plan ready' });
-    expect(handoffEngine.advance()).toMatchObject({ ok: true, to: 'executing' });
+    const needsCompression = handoffEngine.advance();
+    expect(needsCompression).toMatchObject({
+      ok: false,
+      compression_required: true,
+      required_action: 'compress_closed_stage_context'
+    });
+    expect(handoffEngine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'executing' });
   });
 
   it('refuses to auto-advance past a human-approval gate', () => {
@@ -359,5 +365,29 @@ selection_rules:
     expect(ids).toContain('brainstorming');
     expect(ids).toContain('planning');
     expect(ids).toContain('verification');
+  });
+
+  it('requires compression confirmation before low-risk executing advances', () => {
+    for (const pipelineType of ['chore', 'quickfix']) {
+      const root = tmp();
+      mkdirSync(join(root, '.loom'), { recursive: true });
+      copyFileSync(join(process.cwd(), 'templates', 'workflow.yaml'), join(root, '.loom', 'workflow.yaml'));
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '9.9.9' }), 'utf-8');
+      const specDir = join(root, 'specs', pipelineType);
+      mkdirSync(specDir, { recursive: true });
+
+      const eng = new PipelineEngine(root, specDir);
+      eng.initialize(pipelineType);
+      eng.store.writeStageHandoff('executing', { status: 'done', summary: `${pipelineType} done` });
+
+      const blocked = eng.advance();
+      expect(blocked, pipelineType).toMatchObject({
+        ok: false,
+        compression_required: true,
+        required_action: 'compress_closed_stage_context'
+      });
+      expect(eng.currentStage(), pipelineType).toBe('executing');
+      expect(eng.advance({ compressionConfirmed: true }), pipelineType).toMatchObject({ ok: true, to: 'verification' });
+    }
   });
 });

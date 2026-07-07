@@ -23,7 +23,19 @@
 
 **默认不要一口气读取所有上下文文件全文。仅在变更涉及架构决策或跨多模块时例外。**
 
-阶段完成后，必须先写入 `handoffs/<stage>.json`，再调用当前环境提供的上下文压缩能力压缩旧阶段原始对话、探索搜索输出、中间推理和大段日志，然后才进入下一阶段。保留 `spec.md`、`plan.md`、`tasks/`、`pipeline.state.json`、`progress.md`、`handoffs/` 和必要报告；不要重新加载旧阶段原始对话或完整日志来续跑。
+阶段 outputs 声明 `handoffs/<stage>.json` 时，必须先写入对应 handoff，再调用当前环境提供的上下文压缩能力压缩旧阶段原始对话、探索搜索输出、中间推理和大段日志，然后带 `compression_confirmed=true` 推进到下一阶段。保留 `spec.md`、`plan.md`、`tasks/`、`pipeline.state.json`、`progress.md`、`handoffs/` 和必要报告；不要重新加载旧阶段原始对话或完整日志来续跑。
+
+## 入口路由（不替代流水线选择）
+
+收到新请求时，先做轻量入口判断；需要时加载 `loom-router`。router 只负责分流和解释，不写 `pipeline.state.json`，不生成 `dynamic_steps`，不替代 `loom-pipeline-selector`。
+
+- 新功能、跨模块改动、开发型任务：说明原因后交给 `loom-pipeline-selector` 选择 steps。
+- bug、测试失败、异常行为：优先进入 `loom-systematic-debugging`，先建立 red-capable feedback loop。
+- 需求含糊、设计取舍多：进入 `loom-brainstorming`，必要时一问一答澄清。
+- 准备审查：进入 `loom-requesting-code-review`，先做 Standards + Spec 双轴预审查。
+- QA 验收、分支收尾、索引同步、技能编写、loom 使用咨询：分别进入对应 skill，不要强行启动开发流水线。
+
+开发型任务的具体步骤仍由 `loom-pipeline-selector` 决定，并且必须展示选择结果、等待用户确认后才能初始化状态。
 
 ## 开发流水线（智能优先，类型兜底）
 
@@ -98,7 +110,7 @@
 1. **加载对应 skill**（`step.skill` 字段指定的 skill，`null` 表示直接执行无特定 skill）。
 2. **执行该 skill 的流程**，产出对应产物。
 3. **遇到 `gate: human-approval` 时，停下来等待用户确认**。
-4. **写入阶段 handoff、压缩上下文并通过 loom 状态机更新进度**：阶段完成后写入 `handoffs/<stage>.json`，立即压缩已结束阶段的原始上下文，再用 `loom_advance_pipeline` / `loom run --advance` 推进；遇到失败用 `loom run --fail <reason>` 标记。`progress.md` 由 loom 自动生成/更新，不手动编辑。
+4. **写入阶段 handoff、自动压缩上下文并通过 loom 状态机更新进度**：当前阶段 outputs 声明 `handoffs/<stage>.json` 时，先调用 `loom_stage_checkpoint` 或写入对应 handoff；checkpoint 返回后必须立即调用当前宿主环境的 `compress` 压缩已结束阶段的原始上下文；压缩完成后再调用 `loom_advance_pipeline` 并传 `compression_confirmed=true`，或执行 `loom run --advance --compression-confirmed`。未声明 handoff output 的阶段按状态机直接推进。遇到失败用 `loom run --fail <reason>` 标记。`progress.md` 由 loom 自动生成/更新，不手动编辑。
 5. **完成后告知用户**本步骤产物，再进入下一步。
 6. **执行中发现跨模块影响**：调 `loom_adjust_pipeline` 追加步骤（保留已完成阶段）。
 
@@ -113,6 +125,13 @@
 - 主上下文已严重污染，需要隔离重试
 
 **不满足以上条件时，由主 agent 直接执行，不派发 subagent。**
+
+### 会话卫生规则
+
+- **继续当前会话**：同一需求澄清链路、同一 bug 的反馈环收敛中、同一小任务的实现和验证。
+- **写 handoff 后推进**：brainstorming、planning、executing、verification 等声明 handoff output 的阶段结束时，先写 `handoffs/<stage>.json`，宿主 agent 自动调用 `compress` 压缩旧阶段上下文，然后带 `compression_confirmed=true` 推进状态；不得使用会把 checkpoint 和推进合并到同一次调用里的路径跳过压缩点。
+- **开 fresh session 或隔离 subagent**：每个独立 issue 的实现、prototype 探索、并行任务、高风险实验、主上下文已明显污染或需要隔离重试。
+- **不要开新会话**：grilling/澄清中途、pipeline selector 等待用户确认前、阶段尚未写 handoff 时。
 
 ### 特殊规则
 

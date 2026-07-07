@@ -45,25 +45,12 @@ description: loom 全部技能快速参考
 - **触发**：`/loom-init-project` 命令
 - **输出**：宪章、结构化记忆、子 agent 上下文、agent 入口文件
 
-## 通用 Skills（继承 superpowers 框架）
+### router
 
-### test-driven-development
-
-- **用途**：测试驱动开发
-- **触发**：需要 TDD 方式开发
-- **循环**：红 → 绿 → 重构
-
-### systematic-debugging
-
-- **用途**：系统化调试
-- **触发**：遇到 bug、测试失败、运行异常
-- **方法**：复现 → 收集信息 → 缩小范围 → 形成假设 → 验证
-
-### verification-before-completion
-
-- **用途**：完成前验证
-- **触发**：宣布任务完成前
-- **检查**：编译、测试、代码质量、功能完整性、文档同步
+- **用途**：轻量入口路由
+- **触发**：用户请求需要先判断应进入哪个 loom 能力
+- **边界**：不写 `pipeline.state.json`，不生成 `dynamic_steps`，开发型任务交给 `pipeline-selector`
+- **输出**：推荐 skill / pipeline selector、理由、下一步和上下文策略
 
 ### pipeline-selector
 
@@ -73,6 +60,26 @@ description: loom 全部技能快速参考
 - **决策**：规则短路 → AI fallback → 规则兜底
 - **护栏**：must_include、dependency_closure、never_skip_gates、max_steps
 - **下一步**：向用户说明选择结果并等待明确确认后执行；如需人工审查，可先用 `loom select` 生成 `pipeline-plan.md` 再 `loom run --approve-pipeline`
+
+## 通用 Skills（继承 superpowers 框架）
+
+### test-driven-development
+
+- **用途**：测试驱动开发
+- **触发**：需要 TDD 方式开发
+- **循环**：确认 seam → 红 → 绿 → 重构
+
+### systematic-debugging
+
+- **用途**：系统化调试
+- **触发**：遇到 bug、测试失败、运行异常
+- **方法**：建立 red-capable feedback loop → 复现/最小化 → 收集信息 → 形成假设 → 验证 → 修复
+
+### verification-before-completion
+
+- **用途**：完成前验证
+- **触发**：宣布任务完成前
+- **检查**：编译、测试、代码质量、功能完整性、文档同步
 
 ### using-git-worktrees
 
@@ -90,7 +97,7 @@ description: loom 全部技能快速参考
 
 - **用途**：请求代码审查
 - **触发**：准备审查
-- **输出**：审查请求材料
+- **输出**：Standards + Spec 双轴预审查结果和审查请求材料
 
 ### receiving-code-review
 

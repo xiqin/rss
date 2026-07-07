@@ -33,7 +33,7 @@ brainstorming → writing-plans → git-worktree → subagent-dev → verificati
 ## Skills 清单
 
 <!-- loom:generate:skills-catalog -->
-6 流水线 + 2 辅助 + 7 通用 + 1 测试 Skill，共 16 个
+6 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 18 个
 
 **核心流水线 Skills：**
 
@@ -51,6 +51,8 @@ brainstorming → writing-plans → git-worktree → subagent-dev → verificati
 | Skill             | 说明                               |
 | ----------------- | ---------------------------------- |
 | loom-init-project | 项目初始化（扫描 + 生成宪章/记忆/入口） |
+| loom-router | 轻量入口路由（分流到 skill 或 pipeline selector，不写流水线状态） |
+| loom-pipeline-selector | 开发流水线步骤选择（确认后写入 dynamic_steps） |
 | loom-using-loom | loom 框架使用指南（本 skill） |
 
 **通用 Skills：**

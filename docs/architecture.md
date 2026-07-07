@@ -293,7 +293,7 @@ specs/2026-05-27+user-auth/
 
 每一层的写入者唯一，不需要锁、不需要事务。
 
-handoff 是跨阶段、跨 task 的上下文压缩入口：阶段结束时写 `handoffs/<stage>.json`，task 完成时写 `handoffs/<task-id>.json`。CLI 使用 `loom handoff write --spec-dir <dir> --stage <stage> ...` 或 `--task <id>`；MCP 使用 `loom_write_handoff`。写入后 `state-store` 会自动刷新 `progress.md` 的 Handoffs 摘要，`loom status --spec-dir <dir>` 会展示 `status`、`summary` 和 artifacts；`status` 只允许 `done`、`partial`、`blocked`、`failed`。
+handoff 是跨阶段、跨 task 的上下文压缩入口：阶段结束时写 `handoffs/<stage>.json`，task 完成时写 `handoffs/<task-id>.json`。CLI 使用 `loom handoff write --spec-dir <dir> --stage <stage> ...` 或 `--task <id>`；MCP 使用 `loom_write_handoff` 或 `loom_stage_checkpoint`。写入后 `state-store` 会自动刷新 `progress.md` 的 Handoffs 摘要，`loom status --spec-dir <dir>` 会展示 `status`、`summary` 和 artifacts；`status` 只允许 `done`、`partial`、`blocked`、`failed`。阶段 handoff 写入后，宿主 AI 先调用自身的上下文压缩能力，再用 `loom_advance_pipeline compression_confirmed=true` 或 `loom run --advance --compression-confirmed` 推进。
 
 ### 结构化记忆
 
@@ -333,7 +333,7 @@ args = ["mcp-serve"]
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | meta     | `loom_list_capabilities` / `loom_load_tool_group`                                                                                  | 分组能力目录 + 按需加载工具组             |
 | context  | `loom_get_context` / `loom_get_skill_context`                                                                                      | 上下文文件 + Skill 渐进式披露（L0/L1/L2） |
-| pipeline | `loom_get_project_status` / `loom_get_pipeline_context` / `loom_advance_pipeline` / `loom_approve_gate` / `loom_update_task_state` / `loom_select_pipeline` / `loom_adjust_pipeline` / `loom_write_handoff` | 流水线状态机 + AI 流程选择 + 运行时调整 + handoff 写入 |
+| pipeline | `loom_get_project_status` / `loom_get_pipeline_context` / `loom_advance_pipeline` / `loom_approve_gate` / `loom_update_task_state` / `loom_select_pipeline` / `loom_adjust_pipeline` / `loom_write_handoff` / `loom_stage_checkpoint` | 流水线状态机 + AI 流程选择 + 运行时调整 + handoff 写入 |
 | memory   | `loom_get_memory` / `loom_add_memory`                                                                                              | 结构化记忆读写                            |
 | session  | `loom_attach_spec`                                                                                                                 | 连接级 spec 绑定                          |
 
@@ -353,7 +353,7 @@ loom_get_context(doc, section)   → L1 详情：按标题模糊匹配返回单�
 
 ### Skill 渐进式披露
 
-`src/core/skill-loader.js` 对 SKILL.md 实现三层加载，避免 16 个 skill 全量注入：
+`src/core/skill-loader.js` 对 SKILL.md 实现三层加载，避免 18 个 skill 全量注入：
 
 ```
 loom_get_skill_context()                → L0：所有 skill 的 name + description + section 标题 + 触发条件

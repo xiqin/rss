@@ -15,6 +15,8 @@ description: >
 
 **模型选择：** 并行任务通常使用便宜模型（cheap model），因为它们大多是机械实现任务。
 
+**会话边界：** 每个并行任务必须使用独立 fresh subagent。派发前必须有确认过的 task 边界和必要 handoff；不要把主会话原始上下文复制给所有 subagent。
+
 ## 执行流程
 
 ### Step 1：分析任务依赖
@@ -82,3 +84,4 @@ description: >
 - 必须等待所有并行 subagent 完成后才能继续
 - 并行任务的结果需要合并验证
 - 根据任务复杂度选择模型（cheap/standard/capable）
+- 每个并行 subagent 只接收自己的 task、必要 spec 片段、subagent-context 和相关 handoff

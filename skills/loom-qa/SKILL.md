@@ -46,7 +46,7 @@ QA 流水线（`pipeline_type: qa`）有 6 个阶段，每个阶段对应本 ski
 loom run --type qa --spec-dir qa/$(date +%Y-%m-%d)+<target>
 
 # 推进各阶段
-loom run --spec-dir qa/<target> --advance
+loom run --spec-dir qa/<target> --advance --compression-confirmed
 
 # 人工审批节点
 loom run --spec-dir qa/<target> --approve
@@ -64,4 +64,4 @@ loom run --spec-dir qa/<target> --verdict
 
 ## 完成条件
 
-QA 阶段产物和对应 `handoffs/<stage>.json` 均完成后再推进状态机；`qa-report` 作为终止阶段也必须写入 `qa-report.md` 与 `handoffs/qa-report.json`。
+QA 阶段产物和对应 `handoffs/<stage>.json` 均完成后，先压缩旧阶段原始测试过程和长日志，再带压缩确认推进状态机；`qa-report` 作为终止阶段也必须写入 `qa-report.md` 与 `handoffs/qa-report.json`。

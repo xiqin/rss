@@ -122,11 +122,11 @@ export default async function run(options) {
 
   if (options.advance) {
     await withWriteLock(lock, options, () => {
-      const result = engine.advance();
+      const result = engine.advance({ compressionConfirmed: options.compressionConfirmed === true });
       printResult(
         result,
         r => `\n  ✓ Pipeline advanced: ${r.from} → ${r.to}\n`,
-        r => `\n  ✗ Cannot advance: ${r.error}\n`
+        r => `\n  ✗ Cannot advance: ${r.error}\n${r.hint ? `  Hint: ${r.hint}\n` : ''}`
       );
     });
     return;

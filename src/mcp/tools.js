@@ -175,11 +175,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'loom_advance_pipeline',
     group: 'pipeline',
-    description: 'Advance the pipeline to the next stage. Validates artifacts before advancing. Returns error if preconditions not met.',
+    description: 'Advance the pipeline to the next stage after the caller has compressed the closed-stage raw context. Validates artifacts before advancing. Returns error if preconditions not met.',
     inputSchema: {
       type: 'object',
       properties: {
-        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' }
+        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' },
+        compression_confirmed: { type: 'boolean', description: 'Set true only after the host agent has called its context compression tool for the closed stage.' }
       }
     }
   },
@@ -229,7 +230,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'loom_stage_checkpoint',
     group: 'pipeline',
-    description: 'Compact stage checkpoint: write a stage handoff, refresh progress.md, optionally advance the pipeline, and return the next compact pipeline context in one call.',
+    description: 'Compact stage checkpoint: write a stage handoff, refresh progress.md, and return a compact context. If advance=true is passed, advancement is intentionally not performed; the caller must compress context first, then call loom_advance_pipeline with compression_confirmed=true.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -239,7 +240,7 @@ export const TOOL_DEFINITIONS = [
         summary: { type: 'string', description: 'Short handoff summary' },
         artifacts: { type: 'array', items: { type: 'string' }, description: 'Artifact paths to show in progress.md' },
         data: { type: 'object', description: 'Additional JSON fields to merge into the handoff' },
-        advance: { type: 'boolean', description: 'When true, attempt to advance after writing the handoff' },
+        advance: { type: 'boolean', description: 'Deprecated. Advancement is blocked until the caller compresses context and calls loom_advance_pipeline with compression_confirmed=true.' },
         context_detail: { type: 'string', enum: ['summary', 'full'], description: 'summary/default returns compact context; full returns the engine context' },
         handoff_limit: { type: 'number', description: 'Max handoff summaries in returned context (default 5)' }
       },
@@ -527,7 +528,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
     case 'loom_advance_pipeline': {
       if (!specDir) return { error: 'No spec_dir' };
       const abs = safeResolveSpecDir(projectRoot, specDir);
-      return await withSpecLock(abs, () => new PipelineEngine(projectRoot, abs, { fs: fsImpl }).advance(), fsImpl);
+      return await withSpecLock(abs, () => new PipelineEngine(projectRoot, abs, { fs: fsImpl }).advance({ compressionConfirmed: args.compression_confirmed === true }), fsImpl);
     }
 
     case 'loom_approve_gate': {
@@ -603,7 +604,15 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
         };
         store.writeStageHandoff(args.stage, payload);
 
-        const advance = args.advance ? engine.advance() : { ok: true, skipped: true };
+        const advance = args.advance
+          ? {
+              ok: false,
+              skipped: true,
+              compression_required: true,
+              required_action: 'compress_closed_stage_context',
+              hint: 'stage_checkpoint 已写入 handoff；现在调用宿主环境 compress，之后调用 loom_advance_pipeline 并传 compression_confirmed=true。'
+            }
+          : { ok: true, skipped: true };
         const ctx = engine.getStageContext();
         const currentStep = ctx ? engine.getSteps().find(s => s.id === ctx.current_stage) : null;
         if (ctx) {
@@ -632,9 +641,7 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
           context: ctx
             ? (args.context_detail === 'full' ? { ...ctx, detail: 'full' } : summarizePipelineContext(ctx, { handoffLimit: args.handoff_limit }))
             : null,
-          next_required_action: advance?.ok && !advance?.skipped
-            ? 'compress closed-stage raw context before starting the new stage'
-            : 'compress closed-stage raw context before advancing or starting the next stage'
+          next_required_action: 'compress closed-stage raw context, then call loom_advance_pipeline with compression_confirmed=true'
         };
       }, fsImpl);
     }

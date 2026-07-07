@@ -37,6 +37,8 @@ loom 是一个 AI 工程化框架，把需求、规范、上下文、执行过�
 | Skill             | 说明                               |
 | ----------------- | ---------------------------------- |
 | loom-init-project | 项目初始化（扫描 + 生成宪章/记忆/入口） |
+| loom-router | 轻量入口路由（分流到 skill 或 pipeline selector，不写流水线状态） |
+| loom-pipeline-selector | 开发流水线步骤选择（确认后写入 dynamic_steps） |
 | loom-using-loom | loom 框架使用指南（本 skill） |
 
 **通用 Skills：**

@@ -90,6 +90,7 @@ program
   .requiredOption('--spec-dir <path>', 'Path to spec directory')
   .option('--cwd <path>', 'Project root')
   .option('--advance', 'Advance to next stage')
+  .option('--compression-confirmed', 'Confirm closed-stage raw context was compressed before advancing')
   .option('--approve', 'Approve human-approval gate')
   .option('--approve-pipeline', '读取 pipeline-plan.md 并初始化为 dynamic_steps')
   .option('--fail <reason>', 'Mark current stage as failed')

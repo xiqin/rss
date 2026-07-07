@@ -66,7 +66,7 @@ const PIPELINE_SKILLS = [
   'loom-brainstorming', 'loom-writing-plans', 'loom-using-git-worktrees',
   'loom-subagent-driven-development', 'loom-verification-before-completion', 'loom-index-update'
 ];
-const AUX_SKILLS = ['loom-init-project', 'loom-using-loom'];
+const AUX_SKILLS = ['loom-init-project', 'loom-router', 'loom-pipeline-selector', 'loom-using-loom'];
 const GENERAL_SKILLS = [
   'loom-test-driven-development', 'loom-systematic-debugging',
   'loom-requesting-code-review', 'loom-receiving-code-review',
@@ -83,6 +83,8 @@ const SKILL_DETAILS = {
   'loom-verification-before-completion': { output: '验证报告', note: '完成前验证, +Spec覆盖、类型一致性、编译测试' },
   'loom-index-update': { output: 'codegraph 同步 + 结构化记忆', note: 'codegraph 同步' },
   'loom-init-project': { note: '项目初始化（扫描 + 生成宪章/记忆/入口）' },
+  'loom-router': { note: '轻量入口路由（分流到 skill 或 pipeline selector，不写流水线状态）' },
+  'loom-pipeline-selector': { note: '开发流水线步骤选择（确认后写入 dynamic_steps）' },
   'loom-using-loom': { note: 'loom 框架使用指南（本 skill）' },
   'loom-test-driven-development': { note: 'TDD 测试驱动开发，+流程图、好/坏示例、常见借口表' },
   'loom-systematic-debugging': { note: '系统化调试, +4阶段流程图、条件等待、纵深防御' },

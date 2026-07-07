@@ -219,7 +219,7 @@ pipelines:
       - id: executing
         skill: null
         next: verification
-        outputs: []
+        outputs: [handoffs/executing.json]
         description: "直接执行改动（不使用 subagent）"
 
       - id: verification
@@ -235,7 +235,7 @@ pipelines:
     steps:
       - id: executing
         skill: null
-        outputs: []
+        outputs: [handoffs/executing.json]
         description: "直接执行改动"
 
       - id: verification

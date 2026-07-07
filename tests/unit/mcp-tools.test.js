@@ -405,10 +405,74 @@ pipelines:
     expect(r.ok).toBe(true);
     expect(r.path).toBe('handoffs/planning.json');
     expect(r.handoff_summary).toMatchObject({ stage: 'planning', summary: '计划完成' });
-    expect(r.advance.ok).toBe(true);
+    expect(r.advance).toMatchObject({
+      ok: false,
+      skipped: true,
+      compression_required: true,
+      required_action: 'compress_closed_stage_context'
+    });
     expect(r.context.detail).toBe('summary');
     expect(r.context.handoffs_summary.length).toBeLessThanOrEqual(5);
-    expect(r.next_required_action).toMatch(/compress closed-stage raw context/);
+    expect(r.context.current_stage).toBe('planning');
+    expect(r.next_required_action).toMatch(/compression_confirmed=true/);
+  });
+
+  it('advance requires compression confirmation after a stage handoff', async () => {
+    const root = tmp();
+    mkdirSync(join(root, '.loom'), { recursive: true });
+    writeFileSync(join(root, '.loom', 'workflow.yaml'), `
+defaults:
+  pipeline_type: feature
+pipelines:
+  feature:
+    steps:
+      - id: planning
+        skill: loom-writing-plans
+        next: executing
+        outputs: [plan.md, handoffs/planning.json]
+      - id: executing
+        skill: loom-subagent-driven-development
+        requires: [plan.md]
+        outputs: []
+`, 'utf-8');
+    const specDir = join(root, 'specs', 'advance-compress');
+    mkdirSync(specDir, { recursive: true });
+    writeFileSync(join(specDir, 'pipeline.state.json'), JSON.stringify({
+      spec_dir: specDir,
+      pipeline_type: 'feature',
+      current_stage: 'planning',
+      started_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      stage_history: [],
+      metadata: {}
+    }), 'utf-8');
+    writeFileSync(join(specDir, 'plan.md'), '# plan', 'utf-8');
+
+    const store = new SessionStore();
+    await executeToolCall('loom_write_handoff', {
+      spec_dir: 'specs/advance-compress',
+      project_root: root,
+      stage: 'planning',
+      summary: '计划完成',
+      artifacts: ['plan.md']
+    }, store, 's1');
+
+    const blocked = await executeToolCall('loom_advance_pipeline', {
+      spec_dir: 'specs/advance-compress',
+      project_root: root
+    }, store, 's1');
+    expect(blocked).toMatchObject({
+      ok: false,
+      compression_required: true,
+      required_action: 'compress_closed_stage_context'
+    });
+
+    const advanced = await executeToolCall('loom_advance_pipeline', {
+      spec_dir: 'specs/advance-compress',
+      project_root: root,
+      compression_confirmed: true
+    }, store, 's1');
+    expect(advanced).toMatchObject({ ok: true, from: 'planning', to: 'executing' });
   });
 
   it('stage_checkpoint rejects checkpoints for non-current stage', async () => {

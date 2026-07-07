@@ -91,6 +91,18 @@ describe('QA 流水线 — 声明式产物门禁（#2#3#5 验证）', () => {
     write('qa-plan.md', '# QA 测试矩阵\n内容完整');
     handoff('qa-analysis');
     const r = engine.advance();
+    expect(r.ok).toBe(false);
+    expect(r.compression_required).toBe(true);
+
+    const confirmed = engine.advance({ compressionConfirmed: true });
+    expect(confirmed.ok).toBe(true);
+    expect(confirmed.to).toBe('qa-design');
+  });
+
+  it('压缩确认后 qa-plan.md 落地推进到 qa-design', () => {
+    write('qa-plan.md', '# QA 测试矩阵\n内容完整');
+    handoff('qa-analysis');
+    const r = engine.advance({ compressionConfirmed: true });
     expect(r.ok).toBe(true);
     expect(r.to).toBe('qa-design');
   });
@@ -99,7 +111,7 @@ describe('QA 流水线 — 声明式产物门禁（#2#3#5 验证）', () => {
     // 推进到 qa-approved gate，不写 qa-cases.md
     write('qa-plan.md', '# plan');
     handoff('qa-analysis');
-    engine.advance(); // qa-analysis → qa-design（需要 qa-plan.md outputs ✓）
+    engine.advance({ compressionConfirmed: true }); // qa-analysis → qa-design（需要 qa-plan.md outputs ✓）
     // 此时未写 qa-cases.md，qa-design 的 outputs 检查会阻断
     const r = engine.advance();
     expect(r.ok).toBe(false);
@@ -110,10 +122,10 @@ describe('QA 流水线 — 声明式产物门禁（#2#3#5 验证）', () => {
     // 推进到 qa-execution
     write('qa-plan.md', '# plan');
     handoff('qa-analysis');
-    engine.advance(); // → qa-design
+    engine.advance({ compressionConfirmed: true }); // → qa-design
     write('qa-cases.md', '# cases');
     handoff('qa-design');
-    engine.advance(); // → qa-approved (gate)
+    engine.advance({ compressionConfirmed: true }); // → qa-approved (gate)
     engine.approve(); // → qa-execution
     // 写 FAIL 的执行报告
     write('qa-execution-report.md', 'verdict: FAIL\n有用例失败');
@@ -127,15 +139,15 @@ describe('QA 流水线 — 声明式产物门禁（#2#3#5 验证）', () => {
   it('qa-execution gate_verdict=PASS 后推进到 qa-signoff', () => {
     write('qa-plan.md', '# plan');
     handoff('qa-analysis');
-    engine.advance();
+    engine.advance({ compressionConfirmed: true });
     write('qa-cases.md', '# cases');
     handoff('qa-design');
-    engine.advance(); // → qa-approved
+    engine.advance({ compressionConfirmed: true }); // → qa-approved
     engine.approve(); // → qa-execution
     write('qa-execution-report.md', 'verdict: PASS\n全部通过');
     write('manual-checklist.md', '# checklist');
     handoff('qa-execution');
-    const r = engine.advance();
+    const r = engine.advance({ compressionConfirmed: true });
     expect(r.ok).toBe(true);
     expect(r.to).toBe('qa-signoff');
   });
@@ -143,15 +155,15 @@ describe('QA 流水线 — 声明式产物门禁（#2#3#5 验证）', () => {
   it('qa-signoff gate 阻断自动推进，approve 后进入 qa-report', () => {
     write('qa-plan.md', '# plan');
     handoff('qa-analysis');
-    engine.advance();
+    engine.advance({ compressionConfirmed: true });
     write('qa-cases.md', '# cases');
     handoff('qa-design');
-    engine.advance(); // → qa-approved
+    engine.advance({ compressionConfirmed: true }); // → qa-approved
     engine.approve(); // → qa-execution
     write('qa-execution-report.md', 'verdict: PASS');
     write('manual-checklist.md', '# checklist');
     handoff('qa-execution');
-    engine.advance(); // → qa-signoff
+    engine.advance({ compressionConfirmed: true }); // → qa-signoff
     expect(engine.advance().ok).toBe(false); // gate
     const r = engine.approve();
     expect(r.ok).toBe(true);

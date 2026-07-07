@@ -46,31 +46,31 @@ describe('feature pipeline end-to-end (real workflow.yaml)', () => {
     // brainstorming → planning
     write(specDir, 'spec.md', '# Spec\nComplete requirement.');
     writeStageHandoff(engine, 'brainstorming', ['spec.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'planning' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'planning' });
 
     // planning → approved (gate)
     write(specDir, 'plan.md', '# Plan\nTasks laid out.');
     mkdirSync(join(specDir, 'tasks'), { recursive: true });
     write(specDir, 'tasks/T1.md', 'task one');
     writeStageHandoff(engine, 'planning', ['plan.md', 'tasks/']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'approved' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'approved' });
 
     // gate: must approve, cannot auto-advance
     expect(engine.advance().ok).toBe(false);
     expect(engine.approve()).toMatchObject({ ok: true, to: 'git-worktree' });
 
     // git-worktree → executing (executing precondition needs tasks/ dir)
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'executing' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'executing' });
 
     // executing → verification requires test-report PASS
     writePassingReport(specDir, 'test-report.md');
     writeStageHandoff(engine, 'executing', ['test-report.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'verification' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'verification' });
 
     // verification → synced requires verify-report PASS
     writePassingReport(specDir, 'verify-report.md', 'npm run build');
     writeStageHandoff(engine, 'verification', ['verify-report.md']);
-    expect(engine.advance()).toMatchObject({ ok: true, to: 'synced' });
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'synced' });
 
     expect(engine.currentStage()).toBe('synced');
 
@@ -85,17 +85,17 @@ describe('feature pipeline end-to-end (real workflow.yaml)', () => {
     engine.initialize('feature');
     write(specDir, 'spec.md', '# Spec');
     writeStageHandoff(engine, 'brainstorming', ['spec.md']);
-    engine.advance();
+    engine.advance({ compressionConfirmed: true });
     write(specDir, 'plan.md', '# Plan');
     mkdirSync(join(specDir, 'tasks'), { recursive: true });
     write(specDir, 'tasks/T1.md', 't');
     writeStageHandoff(engine, 'planning', ['plan.md', 'tasks/']);
-    engine.advance();
+    engine.advance({ compressionConfirmed: true });
     engine.approve();
-    engine.advance(); // executing
+    engine.advance({ compressionConfirmed: true }); // executing
     writePassingReport(specDir, 'test-report.md');
     writeStageHandoff(engine, 'executing', ['test-report.md']);
-    engine.advance(); // verification
+    engine.advance({ compressionConfirmed: true }); // verification
     write(specDir, 'verify-report.md', 'verdict: FAIL');
     writeStageHandoff(engine, 'verification', ['verify-report.md']);
     const r = engine.advance();

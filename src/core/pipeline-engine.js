@@ -263,9 +263,10 @@ export class PipelineEngine {
 
   /**
    * 尝试推进到下一阶段
+   * @param {{ compressionConfirmed?: boolean }} [opts]
    * @returns {{ ok: boolean, from?: string, to?: string, error?: string, missing?: string[] }}
    */
-  advance() {
+  advance({ compressionConfirmed = false } = {}) {
     const state = this.store.read();
     if (!state) return { ok: false, error: 'Pipeline not initialized. Run: loom run --init', hint: '执行 loom run --spec-dir <spec目录> 初始化流水线' };
 
@@ -311,6 +312,16 @@ export class PipelineEngine {
     const next = this.nextStep(current);
     if (!next) {
       return { ok: false, error: `No next step after "${current}". Pipeline may be complete.`, hint: '流水线可能已完成，检查当前阶段状态' };
+    }
+
+    if (this._requiresStageCompression(currentStep, current) && !compressionConfirmed) {
+      return {
+        ok: false,
+        error: `Stage "${current}" requires context compression before advancing.`,
+        hint: '已写入阶段 handoff 后，先调用宿主环境的 compress 压缩已结束阶段原始上下文，再以 compression_confirmed=true 调用 loom_advance_pipeline，或用 CLI --compression-confirmed。',
+        compression_required: true,
+        required_action: 'compress_closed_stage_context'
+      };
     }
 
     // 检查下一阶段的前置条件（requires 在 next step 声明）
@@ -461,6 +472,10 @@ export class PipelineEngine {
       synced: 'loom-index-update'
     };
     return map[stage] || stage;
+  }
+
+  _requiresStageCompression(step, stage) {
+    return Boolean(step?.outputs?.includes(`handoffs/${stage}.json`));
   }
 
   _recordCompliance(stage, passed = true, reason = '') {

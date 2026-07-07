@@ -35,6 +35,8 @@ description: >
 
 每个 task 派发一个 fresh subagent；实现后由 reviewer 做合并审查（spec 合规 + 代码质量）。审查、测试或验证失败时，提取修复指令，派发 implementer 的修复模式，只传递修复指令 + `.loom/contexts/subagent-context.md`。
 
+每个 fresh subagent 都必须以 task handoff 作为跨会话边界：上游只传递必要 spec 片段、task、subagent-context 和相关 handoff，不把主会话的原始讨论、大段搜索输出或长日志整体塞入子会话。
+
 详细状态处理、执行循环和红线见 `references/execution-details.md`。派发前必须读取相关 prompt 模板：
 
 - `implementer-prompt.md`
@@ -144,6 +146,18 @@ loom tasks --spec-dir specs/<date+feature>
 3. 等待用户明确选择，禁止自动推进。
 
 ## 上下文规则
+
+### 何时开 fresh session
+
+- 每个独立 task 的首次实现。
+- 需要隔离重试的复杂修复。
+- prototype 或高风险实验，不应污染主上下文。
+- 并行任务确认无共享文件冲突后。
+
+### 何时不新开 session
+
+- reviewer 要求的同一 task 小修复，优先使用修复模式传递结构化指令。
+- 上游 handoff 缺失或过期时，先补 handoff 或核对源码，不用新会话掩盖上下文缺口。
 
 首次实现模式传入：
 

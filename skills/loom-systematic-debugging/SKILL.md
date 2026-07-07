@@ -16,19 +16,47 @@ description: >
 
 **Phase 1 完成前不许提出解决方案。** 三次修复失败 → 重新审视架构，不是再试一次补丁。
 
+Phase 1 的完成标准不是“看起来知道原因”，而是已经建立一个 red-capable feedback loop：一个已运行过、能暴露失败、足够快、agent 可重复执行的命令、测试、脚本或 harness。
+
 多组件系统：在每个边界插桩，定位数据流在哪里断了。
 
 ## 执行流程
 
 > 阶段映射：Step1+2=收集信息 → Step3+4=形成/验证假设 → Step5+6=修复验证
 
-### Step 1：复现问题
+### Step 1：建立反馈环
+
+先构造可运行的 pass/fail 信号，再进入根因分析。可选方式包括：
+
+- failing test
+- curl / HTTP script
+- CLI fixture
+- headless browser script
+- captured trace replay
+- throwaway harness
+- property / fuzz loop
+- bisection harness
+- differential loop
+- 带人工确认点的脚本化检查
+
+完成标准：
+
+1. 命令已经运行过。
+2. 当前能失败，或对 flaky bug 明显提高复现率。
+3. 失败与用户报告的行为相关，而不是测试拼写、导入或环境错误。
+4. 运行足够快，能在修复循环中反复执行。
+5. agent 可以独立执行，不依赖未记录的手工步骤。
+
+如果无法建立反馈环，必须停止并说明已尝试的方法、缺失的环境/日志/artifact，以及需要用户提供什么；不得进入修复。
+
+### Step 2：复现并最小化问题
 
 1. 确认问题的复现步骤
 2. 记录环境信息（操作系统、版本、配置）
 3. 确认问题是否可稳定复现
+4. 收紧反馈环：减少依赖、缩短运行时间、缩小输入范围
 
-### Step 2：收集信息
+### Step 3：收集信息
 
 **错误信息**：控制台输出、日志文件、堆栈追踪
 
@@ -36,13 +64,13 @@ description: >
 
 **对比分析**：最近的代码变更、配置变更、环境变更
 
-### Step 3：缩小范围 + 形成假设
+### Step 4：缩小范围 + 形成假设
 
 1. **二分法**：不确定哪个变更导致问题 → 使用 git bisect
 2. **日志定位**：关键位置添加日志，追踪数据流
 3. **单元测试**：编写测试覆盖问题场景
 
-基于收集的信息，列出可能的原因：
+基于收集的信息，列出 3-5 个按可能性排序、可证伪的原因：
 
 ```markdown
 | #   | 假设           | 依据             | 验证方法       |
@@ -58,12 +86,13 @@ description: >
 3. 假设正确 → 进入修复
 4. 假设错误 → 验证下一个假设
 
-### Step 4：修复和验证
+### Step 5：修复和验证
 
 1. 实施修复
 2. 编写回归测试
 3. 运行全量测试
 4. 确认问题解决
+5. 用 Phase 1 的反馈环证明 red → green
 
 详细模式和工具见 references/common-patterns.md
 
@@ -95,6 +124,7 @@ description: >
 - "大概是 X，修一下" / "probably X, let me fix that"
 - "这个简单" / "this is simple"
 - "就试一个东西" / "just try this one thing"
+- 没有 red-capable feedback loop 就开始改代码
 - 三次修复失败还在猜
 
 **所有这些意味着：停止猜测，回到根因分析。**
@@ -112,6 +142,9 @@ description: >
 2. xxx
 
 ### 根因分析
+
+- **反馈环：** <已运行命令 / 测试 / harness>
+- **失败信号：** <red 输出摘要>
 
 - **直接原因：** xxx
 - **根本原因：** xxx

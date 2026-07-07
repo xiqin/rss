@@ -15,6 +15,14 @@ description: >
 - 用户描述需求时包含模糊信号（既非明显 typo 也非明显新功能）。
 - `loom run --auto` 或 MCP `loom_select_pipeline` 调用时。
 
+## 职责边界
+
+`loom-pipeline-selector` 是开发流水线步骤选择器，不是通用入口 router。它只在请求已经被判断为开发型任务，或用户明确要求自动选择流水线时使用。
+
+- 入口分流、解释“该用哪个 loom 能力”由 `loom-router` 负责。
+- 具体选择 `dynamic_steps`、展示来源/风险/步骤、等待确认后写入 `pipeline.state.json` 由本 skill 负责。
+- 本 skill 不处理 QA 验收、审查反馈、分支收尾、loom 使用咨询等非开发流水线入口，除非它们被明确纳入某个开发 pipeline。
+
 ## 执行流程
 
 ### Step 1：收集信号

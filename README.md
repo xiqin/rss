@@ -77,15 +77,16 @@ loom list      # 列出可用 skills 和 commands
 
 loom 的 MCP server 支持通过环境变量控制工具暴露和运行统计。需要把变量配置到客户端启动 `loom mcp-serve` 的 MCP server 配置里，而不是只在普通 shell 会话里临时设置。
 
-| 变量 | 建议值 | 作用 |
-| ---- | ------ | ---- |
-| `LOOM_LAZY_TOOLS` | `1` | 启用 MCP 工具懒加载，默认只暴露基础工具，按需加载 pipeline/context/memory/session 工具组，减少工具定义带来的上下文开销。 |
-| `LOOM_TELEMETRY` | `1` | 开启 loom MCP 工具调用统计，记录调用次数、耗时、响应字节数和估算响应 token；可通过 `loom_telemetry` 工具查看，MCP server 退出时也会向 stderr 输出摘要。 |
+| 变量              | 建议值 | 作用                                                                                                                                                    |
+| ----------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOOM_LAZY_TOOLS` | `1`    | 启用 MCP 工具懒加载，默认只暴露基础工具，按需加载 pipeline/context/memory/session 工具组，减少工具定义带来的上下文开销。                                |
+| `LOOM_TELEMETRY`  | `1`    | 开启 loom MCP 工具调用统计，记录调用次数、耗时、响应字节数和估算响应 token；可通过 `loom_telemetry` 工具查看，MCP server 退出时也会向 stderr 输出摘要。 |
 
 配置示例：
 
+Claude Code (`~/.claude.json`):
+
 ```jsonc
-// Claude Code: mcpServers.loom.env
 {
   "mcpServers": {
     "loom": {
@@ -115,17 +116,6 @@ loom 的 MCP server 支持通过环境变量控制工具暴露和运行统计。
     }
   }
 }
-```
-
-```toml
-# Codex: mcp_servers.loom.env
-[mcp_servers.loom]
-command = "loom"
-args = ["mcp-serve"]
-
-[mcp_servers.loom.env]
-LOOM_LAZY_TOOLS = "1"
-LOOM_TELEMETRY = "1"
 ```
 
 修改 MCP 配置后需要重启对应客户端，运行中的 MCP server 不会自动继承新环境变量。
@@ -245,10 +235,10 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 | 变更影响范围 | 本次变更的函数、接口、类型是否被其他模块引用（codegraph 可用时查 codegraph_impact/codegraph_callers，否则用源码搜索补充判断）、公开接口的参数签名是否变化（新增必填参数、删除字段、类型变更） |
 <!-- /loom:generate:review-summary -->
 
-## Skills（17 个）
+## Skills（18 个）
 
 <!-- loom:generate:skills-catalog -->
-6 流水线 + 2 辅助 + 7 通用 + 1 测试 Skill，共 16 个
+6 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 18 个
 
 **核心流水线 Skills：**
 
@@ -266,6 +256,8 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 | Skill             | 说明                               |
 | ----------------- | ---------------------------------- |
 | loom-init-project | 项目初始化（扫描 + 生成宪章/记忆/入口） |
+| loom-router | 轻量入口路由（分流到 skill 或 pipeline selector，不写流水线状态） |
+| loom-pipeline-selector | 开发流水线步骤选择（确认后写入 dynamic_steps） |
 | loom-using-loom | loom 框架使用指南（本 skill） |
 
 **通用 Skills：**

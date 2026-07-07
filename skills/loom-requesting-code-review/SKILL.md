@@ -28,6 +28,7 @@ description: >
 - [ ] 所有测试通过（TEST_CMD）
 - [ ] 代码符合项目编码红线
 - [ ] codegraph 状态已确认（可用时直接查询 `.codegraph/`，否则注明图查询已跳过）
+- [ ] 已完成 Standards + Spec 双轴预审查，或已说明跳过某一轴的原因
 
 ## 执行流程
 
@@ -36,14 +37,54 @@ description: >
 1. 确认所有变更已完成
 2. 运行验证确保代码质量（读取宪章中的 BUILD_CMD、VET_CMD、TEST_CMD 并执行）
 
-### Step2：整理变更摘要
+### Step2：双轴预审查
+
+请求人工审查前，先对当前 diff 做本地预审查。必须先确定 fixed point，例如用户指定的 commit/branch/tag、PR base、`main` 或 `HEAD~1`；fixed point 不明确时先问用户。
+
+#### Standards 轴
+
+检查代码是否符合项目标准和通用工程质量：
+
+- `.loom/rules/constitution.md`、ADR、CONTRIBUTING、CODING_STANDARDS 等项目规范。
+- 架构分层、模块边界、命名、错误处理、日志、配置、安全和性能。
+- 测试质量：是否测行为、是否覆盖边界、是否避免实现耦合。
+- 固定坏味道基线：重复、过长函数、霰弹式修改、循环依赖、全局状态、过度 mock、临时兼容层、未解释的复杂度。
+
+#### Spec 轴
+
+检查实现是否忠实满足来源需求：
+
+- 从 commit message、PR 描述、`specs/<date+feature>/spec.md`、`plan.md`、issue/PRD 或用户原始请求定位 spec 来源。
+- 对照验收标准、Requirement ID、边界条件和不做范围。
+- 缺少 spec 来源时，明确写“Spec 轴跳过：未找到来源”，或向用户请求来源；不得凭想象补需求。
+
+输出必须分成两个独立区块，不合并、不重排：
+
+```markdown
+## Standards
+
+- <finding 或 无发现>
+
+## Spec
+
+- <finding、跳过原因 或 无发现>
+
+## 预审查摘要
+
+- Standards findings: <数量>，worst: <最严重问题或 none>
+- Spec findings: <数量/跳过>，worst: <最严重问题或 none>
+```
+
+若任一轴发现 blocker，先修复并重新验证，再生成审查请求。
+
+### Step3：整理变更摘要
 
 ```bash
 git diff --stat
 git log --oneline -10
 ```
 
-### Step3：生成审查请求
+### Step4：生成审查请求
 
 ```markdown
 # 代码审查请求
@@ -94,3 +135,5 @@ git log --oneline -10
 - 审查请求必须包含完整的变更摘要
 - 必须标注重点关注项
 - 必须提供自测情况
+- Findings 必须优先于总结，且包含文件/行号或明确的证据来源。
+- 缺少 spec 来源时不得伪造 Spec findings。

@@ -309,12 +309,13 @@ specs/<date+feature>/
 | loom_get_skill_context | context | skill?, section? | L0 摘要或 L1 全文 | 渐进式披露技能文件 |
 | loom_get_project_status | pipeline | spec_dir | 流水线状态 | 获取项目 loom 状态 |
 | loom_get_pipeline_context | pipeline | spec_dir | StageContext 对象 | 获取当前阶段上下文 |
-| loom_advance_pipeline | pipeline | spec_dir, project_root? | AdvanceResult | 推进流水线（加锁） |
+| loom_advance_pipeline | pipeline | spec_dir, project_root?, compression_confirmed? | AdvanceResult | 压缩确认后推进流水线（加锁） |
 | loom_approve_gate | pipeline | spec_dir | transition 结果 | 通过人工审批门禁（加锁） |
 | loom_update_task_state | pipeline | spec_dir, task_id, status | 更新结果 | 更新任务状态 |
 | loom_select_pipeline | pipeline | request, spec_dir?, initialize? | 选择结果；initialize=true 时写入 dynamic_steps | AI 自主流程选择（规则短路 / AI / 兜底） |
 | loom_adjust_pipeline | pipeline | spec_dir, new_remaining_steps | 调整结果 | 执行中追加步骤（保留已完成） |
 | loom_write_handoff | pipeline | spec_dir?, stage?, task_id?, status?, summary?, artifacts?, data? | 写入结果 | 写入 stage 或 task handoff，并刷新 progress.md；status 允许 done/partial/blocked/failed |
+| loom_stage_checkpoint | pipeline | spec_dir?, stage, status?, summary?, artifacts?, data? | checkpoint 结果 | 写 stage handoff 并返回紧凑上下文；推进前必须先压缩 |
 | loom_get_memory | memory | spec_dir?, type?, limit? | Entry 列表 | 读取记忆条目 |
 | loom_add_memory | memory | spec_dir, type, content, context? | 新 Entry | 写入记忆条目 |
 | loom_attach_spec | session | spec_dir, project_root? | 绑定结果 | 绑定会话到 spec 目录 |
@@ -330,7 +331,7 @@ specs/<date+feature>/
 | loom uninstall | | --tool \<targets\> | 卸载 |
 | loom doctor | | | 诊断安装和项目健康 |
 | loom list | | | 列出可用 skills 和 commands |
-| loom run | | --spec-dir, --advance, --approve, --fail, --recover, --task, --task-status, --context, --verdict, --auto, --request, --approve-pipeline | 流水线执行引擎 |
+| loom run | | --spec-dir, --advance, --compression-confirmed, --approve, --fail, --recover, --task, --task-status, --context, --verdict, --auto, --request, --approve-pipeline | 流水线执行引擎 |
 | loom select | | --spec-dir, --request, --json | AI 自主流程选择，可选输出 pipeline-plan.md 供人工审查 |
 | loom handoff write | | --spec-dir, --stage 或 --task, --status, --summary, --artifacts, --data | 写入阶段或任务 handoff，并刷新 progress.md |
 | loom status | | | 显示流水线状态 |
@@ -416,7 +417,7 @@ specs/<date+feature>/
 | chore | executing → verification | 低风险改动，无需审批 |
 | qa | qa-analysis → qa-design → qa-approved → qa-execution → qa-signoff → qa-report | QA 验收流水线，含两次 human-approval gate |
 
-所有非 gate 阶段都应在推进前写入 `handoffs/<stage>.json`，包括 PM 原型和 QA 验收流水线；终止阶段同样先校验 outputs，再返回流水线已结束。
+凡 step.outputs 声明 `handoffs/<stage>.json` 的阶段，都必须在推进前写入对应阶段 handoff；终止阶段同样先校验 outputs，再返回流水线已结束。阶段 handoff 写入后，宿主 AI 必须立即调用当前环境的上下文压缩能力压缩旧阶段原始对话和长日志，再以 `compression_confirmed=true` 调用 MCP `loom_advance_pipeline`，或用 CLI `loom run --advance --compression-confirmed` 推进。`loom_stage_checkpoint` 只负责写 handoff 和返回紧凑上下文，不在同一次调用内推进，避免跳过可插入的自动压缩点。未声明 handoff output 的阶段不会触发上下文压缩门禁。
 
 **动态选择模式**（`loom run --auto --request "<text>"` 或 MCP `loom_select_pipeline`）：
 
@@ -438,8 +439,9 @@ engine.advance() 执行检查（严格顺序）：
 3. 当前阶段 outputs 完整性？     → 检查文件存在 + 无占位符
 4. gate_verdict 报告裁定？      → 检查 verdict === PASS
 5. 是否存在 next step？         → 否：拒绝（流水线已结束）
-6. 下一阶段 requires 前置条件？  → 检查文件/目录存在
-7. 全部通过 → store.transition(nextStage)
+6. 当前阶段若声明 handoff output，是否已确认上下文压缩？ → 否：拒绝，要求先压缩再确认
+7. 下一阶段 requires 前置条件？  → 检查文件/目录存在
+8. 全部通过 → store.transition(nextStage)
 ```
 
 ### 5.4 门禁类型
@@ -449,6 +451,7 @@ engine.advance() 执行检查（严格顺序）：
 | human-approval | step.gate: human-approval | approved, spec-approved, qa-approved, qa-signoff | 用户执行 --approve |
 | gate_verdict | step.gate_verdict: \<filename\> | executing(test-report.md), verification(verify-report.md) | 报告 verdict === PASS |
 | 产物完整性 | step.outputs + checkStageOutputs() | 所有阶段 | 文件存在 + 无占位符 |
+| 上下文压缩 | step.outputs 含 handoffs/&lt;stage&gt;.json | 阶段推进前 | 宿主 AI 调用 compress 后传 `compression_confirmed=true` |
 | 前置条件 | step.requires + checkPreconditions() | 阶段入口 | 文件/目录存在 |
 
 **占位符检测规则**：`TBD`, `TODO`, `FIXME`, `XXX`（大小写敏感），`implement later`, `fill in details`, `placeholder text`（大小写不敏感），`{{VAR}}`（未渲染模板变量）。

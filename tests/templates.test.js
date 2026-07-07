@@ -29,12 +29,14 @@ describe('template schema', () => {
     }
   });
 
-  it('requires verification artifacts for terminal low-risk pipelines', () => {
+  it('requires handoff and verification artifacts for low-risk pipelines', () => {
     const workflow = yaml.load(readFileSync(join(ROOT, 'templates', 'workflow.yaml'), 'utf8'));
 
     for (const pipelineName of ['hotfix', 'chore', 'quickfix']) {
+      const executing = workflow.pipelines[pipelineName].steps.find(step => step.id === 'executing');
       const verification = workflow.pipelines[pipelineName].steps.find(step => step.id === 'verification');
 
+      expect(executing?.outputs, pipelineName).toContain('handoffs/executing.json');
       expect(verification?.outputs, pipelineName).toContain('verify-report.md');
       expect(verification?.outputs, pipelineName).toContain('handoffs/verification.json');
     }
