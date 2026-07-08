@@ -60,7 +60,7 @@
     "pretest": "node scripts/generate-incremental.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "audit:high": "npm audit --audit-level=high",
+    "audit:high": "npm audit --audit-level=high && node bin/loom.js policy check",
     "test:watch": "vitest",
     "prepack": "node scripts/generate-incremental.mjs --force && node scripts/generate-plugin-meta.mjs && node scripts/sync-version.mjs && npm test",
     "prepublishOnly": "node scripts/generate-incremental.mjs --force && node scripts/generate-plugin-meta.mjs && node scripts/sync-version.mjs && npm test"

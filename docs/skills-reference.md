@@ -134,6 +134,9 @@ skills/
 name: <skill-name>
 description: >
   简短描述。Use when: <触发条件>.
+when_to_use: 更精确的触发条件，面向 Agent Skills 标准。
+argument-hint: <用户参数提示>
+user-invocable: true
 ---
 
 # <Skill 标题>
@@ -146,3 +149,15 @@ description: >
 
 ...
 ```
+
+## Frontmatter 字段
+
+| 字段 | 必需 | 说明 |
+| --- | --- | --- |
+| `name` | 是 | skill 名称，必须与目录名一致 |
+| `description` | 是 | 简短描述，用于工具选择和目录生成，仍需包含 `Use when:` |
+| `when_to_use` | 是 | 更精确的标准触发语义，供支持 Agent Skills 的客户端使用 |
+| `argument-hint` | 是 | slash command 或可调用 skill 的参数提示，例如 `<spec_dir>` |
+| `user-invocable` | 是 | 当前内置 skill 均为 `true`，表示可被用户显式调用 |
+
+当前先落地最小兼容字段集。`allowed-tools`、`disallowed-tools`、`model`、`effort`、`context`、skill 局部 hooks 和 eval 将按路线图继续补齐。

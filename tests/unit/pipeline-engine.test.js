@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadWorkflow, PipelineEngine } from '../../src/core/pipeline-engine.js';
@@ -341,8 +341,16 @@ selection_rules:
     writeFileSync(join(specDir, 'verify-report.md'), 'PASS', 'utf-8');
     eng.store.writeStageHandoff('verification', { status: 'done', summary: 'verified' });
     const complete = eng.advance();
-    expect(complete.ok).toBe(false);
-    expect(complete.error).toContain('No next step');
+    expect(complete).toMatchObject({ ok: true, complete: true, stage: 'verification', alreadyComplete: false });
+
+    const history = JSON.parse(readFileSync(join(root, '.loom', 'compliance', 'history.json'), 'utf-8'));
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ stage: 'verification', passed: true });
+
+    const repeated = eng.advance();
+    expect(repeated).toMatchObject({ ok: true, complete: true, stage: 'verification', alreadyComplete: true });
+    const repeatedHistory = JSON.parse(readFileSync(join(root, '.loom', 'compliance', 'history.json'), 'utf-8'));
+    expect(repeatedHistory).toHaveLength(1);
   });
 
   it('adjust appends new steps preserving completed ones', () => {

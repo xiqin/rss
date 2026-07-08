@@ -14,6 +14,257 @@
       "hooksSupport": true,
       "pluginMeta": { "type": "claude-code", "dir": ".claude" },
       "entryFilename": "CLAUDE.md",
+      "contract": {
+        "capabilities": {
+          "hooks": true,
+          "skills": false,
+          "commands": false,
+          "plugin": true,
+          "mcpConfig": true
+        },
+        "installScopes": ["user"],
+        "configSurfaces": ["settings.json", ".claudeignore", "plugin marketplace"],
+        "managedArtifacts": ["plugin registration", "mcpServers.loom", "mcpServers.codegraph", ".claudeignore"],
+        "directoryLayout": [
+          {
+            "scope": "user",
+            "kind": "plugins",
+            "path": "plugin marketplace",
+            "pattern": "loom",
+            "lifecycle": "registered"
+          },
+          {
+            "scope": "user",
+            "kind": "config",
+            "path": ".",
+            "pattern": "settings.json",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "ignore",
+            "path": ".",
+            "pattern": ".claudeignore",
+            "lifecycle": "generated-if-managed"
+          },
+          {
+            "scope": "user",
+            "kind": "cache",
+            "path": "plugins/cache",
+            "pattern": "loom",
+            "lifecycle": "delete-if-present"
+          }
+        ],
+        "mcpServers": [
+          {
+            "id": "loom",
+            "type": "local",
+            "required": true,
+            "configPath": "settings.json",
+            "configKey": "mcpServers.loom"
+          },
+          {
+            "id": "codegraph",
+            "type": "local",
+            "required": false,
+            "configPath": "settings.json",
+            "configKey": "mcpServers.codegraph"
+          }
+        ],
+        "permissions": {
+          "fileSystem": [
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "settings.json",
+              "reason": "manage loom and optional codegraph MCP server entries"
+            },
+            {
+              "scope": "user",
+              "access": "write-if-managed",
+              "path": ".claudeignore",
+              "reason": "maintain generated ignore rules without overwriting custom content"
+            },
+            {
+              "scope": "user",
+              "access": "delete-if-present",
+              "path": "plugins/cache/loom",
+              "reason": "clear stale loom marketplace cache during uninstall"
+            }
+          ],
+          "commands": [
+            {
+              "phase": "install",
+              "access": "execute",
+              "command": "claude plugin marketplace add",
+              "reason": "register the local loom plugin marketplace"
+            },
+            {
+              "phase": "install",
+              "access": "execute",
+              "command": "claude plugin install",
+              "reason": "install the loom plugin at user scope"
+            },
+            {
+              "phase": "install",
+              "access": "execute",
+              "command": "claude plugin enable",
+              "reason": "enable the loom plugin at user scope"
+            },
+            {
+              "phase": "uninstall",
+              "access": "execute",
+              "command": "claude plugin uninstall",
+              "reason": "remove the loom plugin from Claude Code"
+            },
+            {
+              "phase": "uninstall",
+              "access": "execute",
+              "command": "claude plugin marketplace remove",
+              "reason": "unregister the local loom plugin marketplace"
+            }
+          ]
+        },
+        "hookHandlers": [
+          {
+            "id": "session-start",
+            "event": "SessionStart",
+            "handlerType": "local-script",
+            "entry": "handlers/session-start.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "pre-tool-use-audit",
+            "event": "PreToolUse",
+            "handlerType": "local-script",
+            "entry": "handlers/pre-tool-use-audit.cjs",
+            "blocking": true,
+            "fallback": "error"
+          },
+          {
+            "id": "user-prompt-audit",
+            "event": "UserPromptSubmit",
+            "handlerType": "local-script",
+            "entry": "handlers/user-prompt-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "post-tool-use-audit",
+            "event": "PostToolUse",
+            "handlerType": "local-script",
+            "entry": "handlers/post-tool-use-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "permission-request-audit",
+            "event": "PermissionRequest",
+            "handlerType": "local-script",
+            "entry": "handlers/permission-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "permission-denied-audit",
+            "event": "PermissionDenied",
+            "handlerType": "local-script",
+            "entry": "handlers/permission-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "subagent-start-audit",
+            "event": "SubagentStart",
+            "handlerType": "local-script",
+            "entry": "handlers/subagent-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "subagent-stop-audit",
+            "event": "SubagentStop",
+            "handlerType": "local-script",
+            "entry": "handlers/subagent-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "task-created-audit",
+            "event": "TaskCreated",
+            "handlerType": "local-script",
+            "entry": "handlers/task-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "task-completed-audit",
+            "event": "TaskCompleted",
+            "handlerType": "local-script",
+            "entry": "handlers/task-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "worktree-create-audit",
+            "event": "WorktreeCreate",
+            "handlerType": "local-script",
+            "entry": "handlers/worktree-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "worktree-remove-audit",
+            "event": "WorktreeRemove",
+            "handlerType": "local-script",
+            "entry": "handlers/worktree-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "pre-compact-audit",
+            "event": "PreCompact",
+            "handlerType": "local-script",
+            "entry": "handlers/compaction-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "post-compact-audit",
+            "event": "PostCompact",
+            "handlerType": "local-script",
+            "entry": "handlers/compaction-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          },
+          {
+            "id": "file-changed-audit",
+            "event": "FileChanged",
+            "handlerType": "local-script",
+            "entry": "handlers/file-changed-audit.cjs",
+            "blocking": false,
+            "fallback": "warn"
+          }
+        ],
+        "sideEffects": {
+          "install": [
+            "registers loom plugin marketplace and enables the plugin at user scope",
+            "adds loom and optional codegraph MCP servers to settings.json",
+            "writes .claudeignore only when absent or already marked Generated by loom"
+          ],
+          "uninstall": [
+            "unregisters the loom plugin and marketplace from Claude Code",
+            "clears loom plugin marketplace cache when present"
+          ]
+        },
+        "versionProbe": {
+          "command": "claude",
+          "args": ["--version"],
+          "versionPattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)",
+          "installHint": "Install or update Claude Code before relying on plugin and MCP integration."
+        }
+      },
       "description": "Anthropic Claude Code — 支持 skills、hooks、plugin 注册"
     },
     {
@@ -25,6 +276,100 @@
       "hooksSupport": false,
       "pluginMeta": null,
       "entryFilename": ".cursorrules",
+      "contract": {
+        "capabilities": {
+          "hooks": false,
+          "skills": true,
+          "commands": true,
+          "plugin": false,
+          "mcpConfig": true,
+          "sessionInit": true
+        },
+        "installScopes": ["user"],
+        "configSurfaces": ["rules/*.mdc", "mcp/mcp.json"],
+        "managedArtifacts": ["loom-*.mdc", "loom-cmd-*.mdc", "loom-session-init.mdc", "mcpServers.loom", "mcpServers.codegraph"],
+        "directoryLayout": [
+          {
+            "scope": "user",
+            "kind": "skills",
+            "path": "rules/",
+            "pattern": "loom-*.mdc",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "commands",
+            "path": "rules/",
+            "pattern": "loom-cmd-*.mdc",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "session-init",
+            "path": "rules/",
+            "pattern": "loom-session-init.mdc",
+            "lifecycle": "generated-if-template"
+          },
+          {
+            "scope": "user",
+            "kind": "mcp",
+            "path": "mcp/",
+            "pattern": "mcp.json",
+            "lifecycle": "managed"
+          }
+        ],
+        "mcpServers": [
+          {
+            "id": "loom",
+            "type": "local",
+            "required": true,
+            "configPath": "mcp/mcp.json",
+            "configKey": "mcpServers.loom"
+          },
+          {
+            "id": "codegraph",
+            "type": "local",
+            "required": false,
+            "configPath": "mcp/mcp.json",
+            "configKey": "mcpServers.codegraph"
+          }
+        ],
+        "permissions": {
+          "fileSystem": [
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "rules/loom-*.mdc",
+              "reason": "publish loom skills and commands as Cursor rules"
+            },
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "mcp/mcp.json",
+              "reason": "manage loom and optional codegraph MCP server entries"
+            }
+          ],
+          "commands": []
+        },
+        "hookHandlers": [],
+        "sideEffects": {
+          "install": [
+            "converts loom skills to user-level .cursor/rules/loom-*.mdc files",
+            "converts loom commands to user-level .cursor/rules/loom-cmd-*.mdc files",
+            "writes loom-session-init.mdc when the template is available",
+            "adds loom and optional codegraph MCP servers to .cursor/mcp/mcp.json"
+          ],
+          "uninstall": [
+            "removes user-level .cursor/rules/loom-*.mdc files only"
+          ]
+        },
+        "versionProbe": {
+          "command": "cursor",
+          "args": ["--version"],
+          "versionPattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)",
+          "installHint": "Install or update Cursor CLI if command-line rule and MCP diagnostics are unavailable."
+        }
+      },
       "description": "Cursor IDE — 通过 .cursorrules 注入工程规范"
     },
     {
@@ -36,6 +381,130 @@
       "hooksSupport": false,
       "pluginMeta": null,
       "entryFilename": ".github/copilot-instructions.md",
+      "contract": {
+        "capabilities": {
+          "hooks": false,
+          "skills": true,
+          "commands": true,
+          "plugin": false,
+          "mcpConfig": false,
+          "globalInstructions": true,
+          "templates": true
+        },
+        "installScopes": ["user", "project"],
+        "configSurfaces": ["~/.copilot/skills/", "~/.copilot/instructions/", "~/.copilot/copilot-instructions.md", ".github/copilot-instructions.md", ".github/workflows/copilot-setup-steps.yml", ".github/workflows/loom-verify.yml"],
+        "managedArtifacts": ["loom-* skills", "loom-* instructions", "loom-init-project/templates", "generated user copilot-instructions.md", "generated repository copilot-instructions.md", "generated copilot-setup-steps.yml", "generated loom-verify.yml"],
+        "directoryLayout": [
+          {
+            "scope": "user",
+            "kind": "skills",
+            "path": "~/.copilot/skills/",
+            "pattern": "loom-*",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "instructions",
+            "path": "~/.copilot/instructions/",
+            "pattern": "loom-*",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "instructions",
+            "path": "~/.copilot/",
+            "pattern": "copilot-instructions.md",
+            "lifecycle": "generated-if-managed"
+          },
+          {
+            "scope": "project",
+            "kind": "instructions",
+            "path": ".github/",
+            "pattern": "copilot-instructions.md",
+            "lifecycle": "write-if-absent"
+          },
+          {
+            "scope": "project",
+            "kind": "workflow",
+            "path": ".github/workflows/",
+            "pattern": "copilot-setup-steps.yml",
+            "lifecycle": "write-if-absent"
+          },
+          {
+            "scope": "project",
+            "kind": "workflow",
+            "path": ".github/workflows/",
+            "pattern": "loom-verify.yml",
+            "lifecycle": "write-if-absent"
+          }
+        ],
+        "mcpServers": [],
+        "permissions": {
+          "fileSystem": [
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "~/.copilot/skills/loom-*",
+              "reason": "publish loom skills for GitHub Copilot"
+            },
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "~/.copilot/instructions/loom-*",
+              "reason": "publish loom commands as Copilot instructions"
+            },
+            {
+              "scope": "user",
+              "access": "write-if-managed",
+              "path": "~/.copilot/copilot-instructions.md",
+              "reason": "maintain generated user-level Copilot custom instructions"
+            },
+            {
+              "scope": "project",
+              "access": "write-if-absent",
+              "path": ".github/copilot-instructions.md",
+              "reason": "create repository-level Copilot custom instructions without overwriting user content"
+            },
+            {
+              "scope": "project",
+              "access": "write-if-absent",
+              "path": ".github/workflows/copilot-setup-steps.yml",
+              "reason": "create Copilot cloud agent setup workflow without overwriting repository automation"
+            },
+            {
+              "scope": "project",
+              "access": "write-if-absent",
+              "path": ".github/workflows/loom-verify.yml",
+              "reason": "create GitHub Actions verification workflow without overwriting repository automation"
+            }
+          ],
+          "commands": []
+        },
+        "hookHandlers": [],
+        "sideEffects": {
+          "install": [
+            "copies loom skills into ~/.copilot/skills/",
+            "copies loom commands into ~/.copilot/instructions/",
+            "writes user-level ~/.copilot/copilot-instructions.md",
+            "creates project-level .github/copilot-instructions.md when absent",
+            "creates project-level .github/workflows/copilot-setup-steps.yml when absent",
+            "creates project-level .github/workflows/loom-verify.yml when absent"
+          ],
+          "uninstall": [
+            "removes loom-* skills and instructions from the user-level Copilot directories",
+            "removes generated user copilot-instructions.md only when marked Generated by loom",
+            "removes generated repository copilot-instructions.md only when marked Generated by loom",
+            "removes generated copilot-setup-steps.yml only when marked Generated by loom",
+            "removes generated loom-verify.yml only when marked Generated by loom"
+          ]
+        },
+        "versionProbe": {
+          "command": "gh",
+          "args": ["copilot", "--version"],
+          "versionPattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)",
+          "installHint": "Install GitHub CLI with the Copilot extension for local Copilot diagnostics."
+        }
+      },
       "description": "GitHub Copilot — 通过 copilot-instructions.md 注入工程规范"
     },
     {
@@ -47,6 +516,116 @@
       "hooksSupport": false,
       "pluginMeta": { "type": "opencode", "dir": ".opencode" },
       "entryFilename": "AGENTS.md",
+      "contract": {
+        "capabilities": {
+          "hooks": false,
+          "skills": true,
+          "commands": true,
+          "plugin": true,
+          "mcpConfig": true,
+          "templates": true
+        },
+        "installScopes": ["user"],
+        "configSurfaces": ["opencode.json", "skills/", "commands/"],
+        "managedArtifacts": ["loom-engineering plugin", "mcp.loom", "mcp.codegraph", "loom-* skills", "loom-* commands", "loom-init-project/templates", "watcher.ignore entries"],
+        "directoryLayout": [
+          {
+            "scope": "user",
+            "kind": "config",
+            "path": ".",
+            "pattern": "opencode.json",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "plugins",
+            "path": "opencode.json",
+            "pattern": "loom-engineering",
+            "lifecycle": "registered"
+          },
+          {
+            "scope": "user",
+            "kind": "skills",
+            "path": "skills/",
+            "pattern": "loom-*",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "commands",
+            "path": "commands/",
+            "pattern": "loom-*",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "templates",
+            "path": "skills/loom-init-project/",
+            "pattern": "templates/",
+            "lifecycle": "managed"
+          }
+        ],
+        "mcpServers": [
+          {
+            "id": "loom",
+            "type": "local",
+            "required": true,
+            "configPath": "opencode.json",
+            "configKey": "mcp.loom"
+          },
+          {
+            "id": "codegraph",
+            "type": "local",
+            "required": false,
+            "configPath": "opencode.json",
+            "configKey": "mcp.codegraph"
+          }
+        ],
+        "permissions": {
+          "fileSystem": [
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "opencode.json",
+              "reason": "manage loom plugin, watcher ignore defaults, and MCP server entries"
+            },
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "skills/loom-*",
+              "reason": "publish loom skills for OpenCode"
+            },
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "commands/loom-*",
+              "reason": "publish loom commands for OpenCode"
+            }
+          ],
+          "commands": []
+        },
+        "hookHandlers": [],
+        "sideEffects": {
+          "install": [
+            "copies loom skills into the OpenCode user skills directory",
+            "copies loom commands into the OpenCode user commands directory",
+            "adds loom-engineering to opencode.json plugin list",
+            "merges watcher.ignore defaults into opencode.json",
+            "adds loom and optional codegraph MCP servers to opencode.json"
+          ],
+          "uninstall": [
+            "removes loom-engineering from opencode.json plugin list",
+            "removes loom and codegraph MCP servers from opencode.json",
+            "removes loom-* skills and commands from OpenCode user directories"
+          ]
+        },
+        "versionProbe": {
+          "command": "opencode",
+          "args": ["--version"],
+          "versionPattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)",
+          "installHint": "Install or update OpenCode before relying on plugin and MCP integration."
+        }
+      },
       "description": "OpenCode — 支持 skills、plugin 注册"
     },
     {
@@ -58,6 +637,93 @@
       "hooksSupport": false,
       "pluginMeta": null,
       "entryFilename": "AGENTS.md",
+      "contract": {
+        "capabilities": {
+          "hooks": false,
+          "skills": true,
+          "commands": false,
+          "plugin": false,
+          "mcpConfig": true,
+          "templates": true
+        },
+        "installScopes": ["user"],
+        "configSurfaces": ["config.toml", "skills/"],
+        "managedArtifacts": ["mcp_servers.loom", "mcp_servers.codegraph", "loom-* skills", "loom-init-project/templates"],
+        "directoryLayout": [
+          {
+            "scope": "user",
+            "kind": "config",
+            "path": ".",
+            "pattern": "config.toml",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "skills",
+            "path": "skills/",
+            "pattern": "loom-*",
+            "lifecycle": "managed"
+          },
+          {
+            "scope": "user",
+            "kind": "templates",
+            "path": "skills/loom-init-project/",
+            "pattern": "templates/",
+            "lifecycle": "managed"
+          }
+        ],
+        "mcpServers": [
+          {
+            "id": "loom",
+            "type": "local",
+            "required": true,
+            "configPath": "config.toml",
+            "configKey": "mcp_servers.loom"
+          },
+          {
+            "id": "codegraph",
+            "type": "local",
+            "required": false,
+            "configPath": "config.toml",
+            "configKey": "mcp_servers.codegraph"
+          }
+        ],
+        "permissions": {
+          "fileSystem": [
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "config.toml",
+              "reason": "manage loom and optional codegraph MCP server entries"
+            },
+            {
+              "scope": "user",
+              "access": "read-write",
+              "path": "skills/loom-*",
+              "reason": "publish loom skills and templates for Codex"
+            }
+          ],
+          "commands": []
+        },
+        "hookHandlers": [],
+        "sideEffects": {
+          "install": [
+            "copies loom skills into the Codex user skills directory",
+            "copies loom-init-project templates when the skill is installed",
+            "adds loom and optional codegraph MCP servers to config.toml"
+          ],
+          "uninstall": [
+            "removes loom-* skills from the Codex user skills directory",
+            "removes the loom MCP server from config.toml"
+          ]
+        },
+        "versionProbe": {
+          "command": "codex",
+          "args": ["--version"],
+          "versionPattern": "(\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?)",
+          "installHint": "Install or update Codex CLI before relying on skills and MCP integration."
+        }
+      },
       "description": "OpenAI Codex CLI — 支持 skills 和 MCP 配置"
     }
   ]

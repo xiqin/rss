@@ -4,6 +4,9 @@ description: >
   Process code review feedback: classify items, implement fixes, push back with reasoning when needed.
   Triggered after receiving review comments on a PR or branch.
   Use when: code review comments have arrived and need triage, fixes, or reasoned disagreement.
+when_to_use: Triage review feedback, implement valid fixes, and respond with evidence when pushing back.
+argument-hint: <review comments or PR context>
+user-invocable: true
 ---
 
 # 接受代码审查

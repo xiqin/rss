@@ -3,6 +3,9 @@ name: loom-finishing-a-development-branch
 description: >
   Clean up a feature branch after verification: merge, create PR, keep, or discard. Follows conventional commits.
   Use when: a development branch has passed verification and needs merge, PR, keep, or discard handling.
+when_to_use: Finish a verified development branch by choosing merge, PR, keep, or discard handling.
+argument-hint: <branch or spec_dir>
+user-invocable: true
 ---
 
 # 开发分支收尾

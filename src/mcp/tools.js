@@ -275,11 +275,21 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'loom_get_memory',
     group: 'memory',
-    description: 'Read project memory entries: gotchas, decisions, preferences. Filter by type.',
+    description: 'Read project memory entries with structured filters: type, tag, scope, stage, related spec/task/file and expiration.',
     inputSchema: {
       type: 'object',
       properties: {
         type: { type: 'string', description: 'Filter: 决策, 踩坑, 偏好, 状态, adr' },
+        tag: { type: 'string', description: 'Filter by tag' },
+        scope: { type: 'string', description: 'Filter by applicability scope' },
+        stage: { type: 'string', description: 'Filter by pipeline stage' },
+        file: { type: 'string', description: 'Filter by related file path' },
+        spec_dir: { type: 'string', description: 'Filter by related spec directory' },
+        pr: { type: 'string', description: 'Filter by related pull request' },
+        commit: { type: 'string', description: 'Filter by related commit' },
+        task: { type: 'string', description: 'Filter by related task id' },
+        handoff: { type: 'string', description: 'Filter by related handoff artifact' },
+        include_expired: { type: 'boolean', description: 'Include expired memory entries' },
         limit: { type: 'number', description: 'Max entries (default 10)' },
         project_root: { type: 'string', description: 'Project root directory (optional if attached)' }
       }
@@ -288,13 +298,25 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'loom_add_memory',
     group: 'memory',
-    description: 'Write a new memory entry (decision, gotcha, preference).',
+    description: 'Write a new memory entry with source, confidence, scope, expiration and links to spec/PR/commit/task/handoff/file.',
     inputSchema: {
       type: 'object',
       properties: {
         type: { type: 'string', enum: ['决策', '踩坑', '偏好', '状态', 'adr'], description: 'Memory type' },
         content: { type: 'string', description: 'One-line description' },
         context: { type: 'string', description: 'Background/reason (optional, for ADRs)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags for retrieval' },
+        source: { type: 'string', description: 'Source of this memory, e.g. issue, PR, review, session' },
+        confidence: { type: 'number', description: 'Confidence from 0 to 1' },
+        scope: { type: 'string', description: 'Applicability scope, e.g. project | spec | file | team' },
+        expires_at: { type: 'string', description: 'Expiration timestamp for temporary memory' },
+        spec_dir: { type: 'string', description: 'Related spec directory' },
+        pr: { type: 'string', description: 'Related pull request id or URL' },
+        commit: { type: 'string', description: 'Related commit SHA' },
+        task: { type: 'string', description: 'Related task id' },
+        handoff: { type: 'string', description: 'Related handoff artifact' },
+        stage: { type: 'string', description: 'Related pipeline stage' },
+        files: { type: 'array', items: { type: 'string' }, description: 'Related file paths' },
         project_root: { type: 'string', description: 'Project root directory (optional if attached)' }
       },
       required: ['type', 'content']
@@ -349,6 +371,181 @@ export const TOOL_DEFINITIONS = [
   }
 ];
 
+const TOOL_SECURITY_DEFAULT = {
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  loom: {
+    risk: 'medium',
+    effects: ['state'],
+    writes: [],
+    requiresUserConfirmation: false,
+  },
+};
+
+const READ_ONLY = {
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  loom: {
+    risk: 'low',
+    effects: ['read'],
+    writes: [],
+    requiresUserConfirmation: false,
+  },
+};
+
+const SESSION_WRITE = {
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  loom: {
+    risk: 'low',
+    effects: ['session'],
+    writes: ['mcp-session'],
+    requiresUserConfirmation: false,
+  },
+};
+
+const TOOL_SECURITY = {
+  loom_list_capabilities: READ_ONLY,
+  loom_get_context: READ_ONLY,
+  loom_get_project_status: READ_ONLY,
+  loom_get_pipeline_context: READ_ONLY,
+  loom_get_memory: READ_ONLY,
+  loom_get_skill_context: READ_ONLY,
+  loom_telemetry: READ_ONLY,
+
+  loom_load_tool_group: SESSION_WRITE,
+  loom_attach_spec: SESSION_WRITE,
+
+  loom_select_pipeline: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['read', 'state'],
+      writes: ['pipeline.state.json when initialize=true', 'progress.md when initialize=true'],
+      requiresUserConfirmation: 'when initialize=true',
+    },
+  },
+  loom_advance_pipeline: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['state', 'file'],
+      writes: ['pipeline.state.json', 'progress.md', '.loom/compliance/history.json'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_approve_gate: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['state', 'approval'],
+      writes: ['pipeline.state.json', 'progress.md'],
+      requiresUserConfirmation: true,
+    },
+  },
+  loom_update_task_state: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['state', 'file'],
+      writes: ['task-states/<task>.state.json', 'progress.md'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_write_handoff: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['file'],
+      writes: ['handoffs/<stage-or-task>.json', 'progress.md'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_stage_checkpoint: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['file'],
+      writes: ['handoffs/<stage>.json', 'progress.md'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_adjust_pipeline: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'high',
+      effects: ['state', 'workflow'],
+      writes: ['pipeline.state.json', 'progress.md'],
+      requiresUserConfirmation: true,
+    },
+  },
+  loom_add_memory: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'low',
+      effects: ['file', 'memory'],
+      writes: ['.loom/memory/store.json'],
+      requiresUserConfirmation: false,
+    },
+  },
+};
+
+for (const tool of TOOL_DEFINITIONS) {
+  Object.assign(tool, TOOL_SECURITY[tool.name] || TOOL_SECURITY_DEFAULT);
+}
+
 /**
  * 分组级"虚拟 Skill"描述（②）。模型先调 loom_list_capabilities 读这份目录，
  * 判断任务需要哪一组，再按需使用该组工具——而非把每个工具的细节都吃进上下文。
@@ -386,6 +583,95 @@ export const CAPABILITY_GROUPS = {
     tools: ['loom_list_capabilities', 'loom_load_tool_group', 'loom_telemetry'],
   },
 };
+
+function readContextResource(uri, doc, projectRoot, fsImpl) {
+  const idx = loadContextIndex(join(projectRoot, '.loom'), doc, fsImpl);
+  if (!idx) throw new Error(`Context resource not found: ${uri}`);
+  return {
+    uri,
+    mimeType: 'text/markdown',
+    text: idx.full().content,
+  };
+}
+
+function readFileResource(uri, path, mimeType, fsImpl) {
+  if (!fsImpl.existsSync(path)) throw new Error(`Resource not found: ${uri}`);
+  return {
+    uri,
+    mimeType,
+    text: fsImpl.readFileSync(path, 'utf-8'),
+  };
+}
+
+function decodeSpecPath(value) {
+  try { return decodeURIComponent(value); }
+  catch { throw new Error(`Invalid encoded spec_dir: ${value}`); }
+}
+
+function decodeResourceId(value) {
+  let decoded;
+  try { decoded = decodeURIComponent(value); }
+  catch { throw new Error(`Invalid encoded resource id: ${value}`); }
+  if (!/^[A-Za-z0-9_.-]+$/.test(decoded) || decoded.includes('..')) {
+    throw new Error(`Invalid resource id: ${decoded}`);
+  }
+  return decoded;
+}
+
+export function readMcpResource(uri, sessionStore, sessionId, { fs, projectRoot } = {}) {
+  if (!uri) throw new Error('Missing resource uri');
+  const fsImpl = fs || new NodeFileSystem();
+
+  if (uri === 'loom://skills/catalog') {
+    const skills = new SkillLoader(SKILLS_DIR, { fs: fsImpl }).listSummaries();
+    return {
+      contents: [{
+        uri,
+        mimeType: 'application/json',
+        text: JSON.stringify({ skills }, null, 2),
+      }],
+    };
+  }
+
+  const root = sessionStore.resolveProjectRoot(sessionId, projectRoot);
+  if (uri === 'loom://memory') {
+    return { contents: [readContextResource(uri, 'memory', root, fsImpl)] };
+  }
+
+  const contextMatch = uri.match(/^loom:\/\/context\/([^/]+)$/);
+  if (contextMatch) {
+    const doc = decodeURIComponent(contextMatch[1]);
+    if (!DOC_KEYS.includes(doc)) {
+      throw new Error(`Unknown context resource: ${doc}. One of: ${DOC_KEYS.join(', ')}`);
+    }
+    return { contents: [readContextResource(uri, doc, root, fsImpl)] };
+  }
+
+  const specResourceMatch = uri.match(/^loom:\/\/spec\/(.+)\/(state|progress)$/);
+  if (specResourceMatch) {
+    const specDir = safeResolveSpecDir(root, decodeSpecPath(specResourceMatch[1]));
+    const [, , kind] = specResourceMatch;
+    const file = kind === 'state' ? 'pipeline.state.json' : 'progress.md';
+    const mimeType = kind === 'state' ? 'application/json' : 'text/markdown';
+    return { contents: [readFileResource(uri, join(specDir, file), mimeType, fsImpl)] };
+  }
+
+  const handoffMatch = uri.match(/^loom:\/\/spec\/(.+)\/handoffs\/([^/]+)$/);
+  if (handoffMatch) {
+    const specDir = safeResolveSpecDir(root, decodeSpecPath(handoffMatch[1]));
+    const handoffId = decodeResourceId(handoffMatch[2]);
+    return {
+      contents: [readFileResource(
+        uri,
+        join(specDir, 'handoffs', `${handoffId}.json`),
+        'application/json',
+        fsImpl
+      )],
+    };
+  }
+
+  throw new Error(`Unknown resource uri: ${uri}`);
+}
 
 // ── 工具执行 ───────────────────────────────────────────────────────────────
 
@@ -659,12 +945,39 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
 
     case 'loom_get_memory': {
       const memStore = new MemoryStore(join(projectRoot, '.loom'), { fs: fsImpl });
-      return memStore.list({ type: args.type, limit: args.limit || 10 });
+      return memStore.list({
+        type: args.type,
+        tag: args.tag,
+        scope: args.scope,
+        stage: args.stage,
+        file: args.file,
+        specDir: args.spec_dir,
+        pr: args.pr,
+        commit: args.commit,
+        task: args.task,
+        handoff: args.handoff,
+        includeExpired: args.include_expired,
+        limit: args.limit || 10,
+      });
     }
 
     case 'loom_add_memory': {
       const memStore = new MemoryStore(join(projectRoot, '.loom'), { fs: fsImpl });
-      const entry = memStore.add(args.type, args.content, { context: args.context });
+      const entry = memStore.add(args.type, args.content, {
+        context: args.context,
+        tags: args.tags,
+        source: args.source,
+        confidence: args.confidence,
+        scope: args.scope,
+        expiresAt: args.expires_at,
+        specDir: args.spec_dir,
+        pr: args.pr,
+        commit: args.commit,
+        task: args.task,
+        handoff: args.handoff,
+        stage: args.stage,
+        files: args.files,
+      });
       return { ok: true, entry };
     }
 

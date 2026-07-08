@@ -10,5 +10,228 @@
       "idempotent": true,
       "fallback": "warn"
     }
+  ],
+  "UserPromptSubmit": [
+    {
+      "id": "user-prompt-audit",
+      "entry": "handlers/user-prompt-audit.cjs",
+      "description": "UserPromptSubmit 阶段记录用户请求、风险分类与流程建议到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "suggestions": ["pipeline-selector", "systematic-debugging", "qa", "approval"]
+      }
+    }
+  ],
+  "PreToolUse": [
+    {
+      "id": "pre-tool-use-audit",
+      "entry": "handlers/pre-tool-use-audit.cjs",
+      "description": "PreToolUse 阶段审计并阻断未确认的高风险 shell 命令",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": true,
+      "idempotent": true,
+      "fallback": "error",
+      "policy": {
+        "requiresConfirmationFor": "high-risk-command"
+      }
+    }
+  ],
+  "PostToolUse": [
+    {
+      "id": "post-tool-use-audit",
+      "entry": "handlers/post-tool-use-audit.cjs",
+      "description": "PostToolUse 阶段记录工具执行结果、错误摘要、产物与风险结果到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "captures": ["tool", "input-summary", "exit-code", "artifacts", "error-summary", "risk"]
+      }
+    }
+  ],
+  "PermissionRequest": [
+    {
+      "id": "permission-request-audit",
+      "entry": "handlers/permission-audit.cjs",
+      "description": "PermissionRequest 阶段记录权限请求到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "decision": "requested"
+      }
+    }
+  ],
+  "PermissionDenied": [
+    {
+      "id": "permission-denied-audit",
+      "entry": "handlers/permission-audit.cjs",
+      "description": "PermissionDenied 阶段记录权限拒绝到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "decision": "denied"
+      }
+    }
+  ],
+  "SubagentStart": [
+    {
+      "id": "subagent-start-audit",
+      "entry": "handlers/subagent-audit.cjs",
+      "description": "SubagentStart 阶段记录 subagent 会话与任务关联到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["task-state", "handoff"]
+      }
+    }
+  ],
+  "SubagentStop": [
+    {
+      "id": "subagent-stop-audit",
+      "entry": "handlers/subagent-audit.cjs",
+      "description": "SubagentStop 阶段记录 subagent 结果、任务状态与 handoff 关联到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["task-state", "handoff"]
+      }
+    }
+  ],
+  "TaskCreated": [
+    {
+      "id": "task-created-audit",
+      "entry": "handlers/task-audit.cjs",
+      "description": "TaskCreated 阶段记录任务元数据、状态文件与 handoff 关联到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["task-file", "task-state", "handoff"]
+      }
+    }
+  ],
+  "TaskCompleted": [
+    {
+      "id": "task-completed-audit",
+      "entry": "handlers/task-audit.cjs",
+      "description": "TaskCompleted 阶段记录任务结果、产物与失败原因到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["task-file", "task-state", "handoff", "artifacts"]
+      }
+    }
+  ],
+  "WorktreeCreate": [
+    {
+      "id": "worktree-create-audit",
+      "entry": "handlers/worktree-audit.cjs",
+      "description": "WorktreeCreate 阶段记录隔离工作区路径、分支与基线到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["worktree-path", "branch", "base-branch"]
+      }
+    }
+  ],
+  "WorktreeRemove": [
+    {
+      "id": "worktree-remove-audit",
+      "entry": "handlers/worktree-audit.cjs",
+      "description": "WorktreeRemove 阶段记录隔离工作区清理状态与残留风险到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "links": ["worktree-path", "branch", "cleanup-status", "residual-risks"]
+      }
+    }
+  ],
+  "PreCompact": [
+    {
+      "id": "pre-compact-audit",
+      "entry": "handlers/compaction-audit.cjs",
+      "description": "PreCompact 阶段记录压缩前上下文摘要与 handoff 到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "handoff": "handoffs/compact-pre.json"
+      }
+    }
+  ],
+  "PostCompact": [
+    {
+      "id": "post-compact-audit",
+      "entry": "handlers/compaction-audit.cjs",
+      "description": "PostCompact 阶段记录压缩后上下文摘要与 handoff 到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "handoff": "handoffs/compact-post.json"
+      }
+    }
+  ],
+  "FileChanged": [
+    {
+      "id": "file-changed-audit",
+      "entry": "handlers/file-changed-audit.cjs",
+      "description": "FileChanged 阶段记录变更路径、风险分类与同步建议到合规历史",
+      "platforms": ["linux", "macos", "windows"],
+      "timeoutMs": 5000,
+      "blocking": false,
+      "idempotent": false,
+      "fallback": "warn",
+      "policy": {
+        "auditHistory": ".loom/compliance/history.json",
+        "syncSuggestions": ["codegraph", "context", "generate-check", "secret-scan"]
+      }
+    }
   ]
 }

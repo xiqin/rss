@@ -43,6 +43,7 @@ const header = `/**
 
 const toolEntries = schema.tools.map(t => {
   const pluginMeta = t.pluginMeta === null ? 'null' : JSON.stringify(t.pluginMeta);
+  const contract = t.contract ? JSON.stringify(t.contract) : 'null';
   const adapter = t.adapter ? `adapter: ${JSON.stringify(t.adapter)}` : 'adapter: null';
   return `  {
     id: ${JSON.stringify(t.id)},
@@ -53,6 +54,7 @@ const toolEntries = schema.tools.map(t => {
     hooksSupport: ${t.hooksSupport},
     pluginMeta: ${pluginMeta},
     entryFilename: ${JSON.stringify(t.entryFilename)},
+    contract: ${contract},
     description: ${JSON.stringify(t.description)},
   }`;
 });
@@ -79,6 +81,14 @@ export const TOOL_IDS = TOOLS.map(t => t.id);
 
 /** @type {string[]} Only tools with implemented adapters */
 export const IMPLEMENTED_TOOL_IDS = Object.keys(ADAPTER_MAP);
+
+/** Adapter contracts keyed by tool id */
+export const ADAPTER_CONTRACTS = Object.fromEntries(TOOLS.map(t => [t.id, t.contract ?? null]));
+
+/** Lookup adapter contract by id */
+export function getAdapterContract(id) {
+  return ADAPTER_CONTRACTS[id] ?? null;
+}
 
 /** Lookup tool config by id */
 export function getToolConfig(id) {

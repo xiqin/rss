@@ -32,6 +32,33 @@ function writeFileAtomic(path, content, fs) {
 function now() { return new Date().toISOString(); }
 function today() { return now().slice(0, 10); }
 
+function cleanArray(value) {
+  if (!value) return [];
+  const items = Array.isArray(value) ? value : String(value).split(',');
+  return items.map(item => String(item).trim()).filter(Boolean);
+}
+
+function cleanLinks(opts) {
+  const links = { ...(opts.links || {}) };
+  if (opts.specDir || opts.spec) links.spec = opts.specDir || opts.spec;
+  if (opts.pr) links.pr = opts.pr;
+  if (opts.commit) links.commit = opts.commit;
+  if (opts.task) links.task = opts.task;
+  if (opts.handoff) links.handoff = opts.handoff;
+  return Object.fromEntries(Object.entries(links).filter(([, value]) => value != null && value !== ''));
+}
+
+function normalizeConfidence(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(1, n));
+}
+
+function isExpired(entry) {
+  return Boolean(entry.expires_at && entry.expires_at <= now());
+}
+
 const SESSION_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 
 function assertValidSessionSlug(slug) {
@@ -71,7 +98,7 @@ export class MemoryStore {
    * 添加一条记忆
    * @param {string} type     '决策' | '踩坑' | '偏好' | '状态' | 'adr'
    * @param {string} content  一句话描述
-   * @param {object} [opts]   { author, context, tags }
+   * @param {object} [opts]   { author, context, tags, source, confidence, scope, expiresAt, stage, files, links }
    * @returns {object}        新创建的 entry
    */
   add(type, content, opts = {}) {
@@ -81,8 +108,15 @@ export class MemoryStore {
       type,
       content,
       author: opts.author || this._detectAuthor(),
-      tags: opts.tags || [],
+      tags: cleanArray(opts.tags),
       context: opts.context || null,
+      source: opts.source || null,
+      confidence: normalizeConfidence(opts.confidence),
+      scope: opts.scope || 'project',
+      expires_at: opts.expiresAt || opts.expires_at || null,
+      stage: opts.stage || null,
+      files: cleanArray(opts.files),
+      links: cleanLinks(opts),
       created_at: now()
     };
     data.entries.unshift(entry); // 最新在前
@@ -98,7 +132,7 @@ export class MemoryStore {
 
   /**
    * 列出记忆（支持过滤）
-   * @param {object} [filter] { type, author, limit, since }
+   * @param {object} [filter] { type, author, limit, since, tag, scope, stage, file, specDir, task, includeExpired }
    */
   list(filter = {}) {
     const data = this._load();
@@ -107,6 +141,22 @@ export class MemoryStore {
     if (filter.type) entries = entries.filter(e => e.type === filter.type);
     if (filter.author) entries = entries.filter(e => e.author === filter.author);
     if (filter.since) entries = entries.filter(e => e.created_at >= filter.since);
+    if (!filter.includeExpired) entries = entries.filter(e => !isExpired(e));
+    if (filter.tag) entries = entries.filter(e => (e.tags || []).includes(filter.tag));
+    if (filter.scope) entries = entries.filter(e => e.scope === filter.scope);
+    if (filter.stage) entries = entries.filter(e => e.stage === filter.stage);
+    if (filter.file) entries = entries.filter(e => (e.files || []).includes(filter.file));
+
+    const linkFilters = {
+      spec: filter.specDir || filter.spec,
+      pr: filter.pr,
+      commit: filter.commit,
+      task: filter.task,
+      handoff: filter.handoff,
+    };
+    for (const [key, value] of Object.entries(linkFilters)) {
+      if (value) entries = entries.filter(e => e.links?.[key] === value);
+    }
 
     const limit = filter.limit || 20;
     return entries.slice(0, limit);

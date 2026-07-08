@@ -44,7 +44,7 @@ export default async function uninstall(options) {
       continue;
     }
 
-    const log = adapter.uninstall(PROJECT_ROOT);
+    const log = adapter.uninstall(PROJECT_ROOT, process.cwd());
     console.log(log.join('\n'));
     console.log('');
   }

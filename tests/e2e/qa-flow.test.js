@@ -70,9 +70,8 @@ describe('QA 流水线 e2e（使用真实 workflow.yaml）', () => {
     write(qaDir, 'qa-report.md', '# QA 验收报告\nverdict: PASS\n全部通过，建议上线');
     handoff(engine, 'qa-report', ['qa-report.md']);
     const r = engine.advance();
-    // qa-report 是最后一步，无 next → 正常结束
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/No next step/);
+    // qa-report 是最后一步，终止阶段完成即流水线完成
+    expect(r).toMatchObject({ ok: true, complete: true, stage: 'qa-report', alreadyComplete: false });
     expect(engine.currentStage()).toBe('qa-report');
   });
 

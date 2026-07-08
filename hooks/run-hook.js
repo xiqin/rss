@@ -26,13 +26,48 @@ export function loadHooks(hooksDir = __dirname) {
 }
 
 /**
+ * Flatten either the legacy array format or the event-indexed hook registry.
+ * @param {Array<object>|Record<string, Array<object>>} hooks
+ * @returns {Array<object>}
+ */
+export function flattenHooks(hooks) {
+  if (Array.isArray(hooks)) return hooks;
+  if (!hooks || typeof hooks !== 'object') return [];
+
+  const flattened = [];
+  for (const [eventName, eventHooks] of Object.entries(hooks)) {
+    if (!Array.isArray(eventHooks)) continue;
+    for (const hook of eventHooks) {
+      flattened.push({ ...hook, event: hook.event ?? eventName });
+    }
+  }
+  return flattened;
+}
+
+/**
+ * Return hooks registered for a lifecycle event.
+ * @param {Array<object>|Record<string, Array<object>>} hooks
+ * @param {string} eventName
+ * @returns {Array<object>}
+ */
+export function listHooksForEvent(hooks, eventName) {
+  if (Array.isArray(hooks)) {
+    return hooks.filter(h => h.event === eventName || h.events?.includes?.(eventName));
+  }
+  if (!hooks || typeof hooks !== 'object') return [];
+  const eventHooks = hooks[eventName];
+  if (!Array.isArray(eventHooks)) return [];
+  return eventHooks.map(hook => ({ ...hook, event: hook.event ?? eventName }));
+}
+
+/**
  * Find hook by id.
  * @param {Array<object>} hooks
  * @param {string} hookId
  * @returns {object|null}
  */
 export function findHook(hooks, hookId) {
-  return hooks.find(h => h.id === hookId) ?? null;
+  return flattenHooks(hooks).find(h => h.id === hookId) ?? null;
 }
 
 /**
@@ -55,8 +90,8 @@ export function supportsPlatform(hook, platform) {
 export async function withTimeout(fn, timeoutMs) {
   if (timeoutMs <= 0) {
     try {
-      await fn();
-      return { ok: true, timedOut: false };
+      const value = await fn();
+      return { ok: true, timedOut: false, value };
     } catch (error) {
       return { ok: false, timedOut: false, error };
     }
@@ -64,13 +99,13 @@ export async function withTimeout(fn, timeoutMs) {
 
   let timer;
   try {
-    await Promise.race([
+    const value = await Promise.race([
       fn(),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('HOOK_TIMEOUT')), timeoutMs);
       }),
     ]);
-    return { ok: true, timedOut: false };
+    return { ok: true, timedOut: false, value };
   } catch (error) {
     return {
       ok: false,
@@ -100,6 +135,17 @@ function logForStrategy(strategy, hookId) {
   }
 }
 
+function normalizeHandlerDecision(value) {
+  if (!value || typeof value !== 'object') return { status: 'ok' };
+  const status = value.status ?? value.verdict;
+  if (!status) return { status: 'ok', data: value };
+  return {
+    status: String(status).toLowerCase(),
+    message: value.message ?? value.reason,
+    data: value,
+  };
+}
+
 /**
  * Run a single hook by id.
  *
@@ -114,6 +160,13 @@ export async function runHook(hookId, options = {}) {
   const platform = options.platform ?? detectPlatform();
   const hooks = loadHooks(hooksDir);
   const hook = findHook(hooks, hookId);
+
+  return executeHook(hook, hookId, { ...options, hooksDir, platform });
+}
+
+async function executeHook(hook, hookId, options) {
+  const hooksDir = options.hooksDir ?? __dirname;
+  const platform = options.platform ?? detectPlatform();
 
   if (!hook) {
     return { hookId, status: 'skipped', message: `Hook "${hookId}" not found in hooks.json` };
@@ -155,10 +208,30 @@ export async function runHook(hookId, options = {}) {
       await new Promise(r => setTimeout(r, 500));
     }
 
-    const result = await withTimeout(() => handler(), hook.timeoutMs);
+    const result = await withTimeout(
+      () => handler({ event: options.eventName ?? hook.event, payload: options.payload, hook }),
+      hook.timeoutMs ?? 0,
+    );
 
     if (result.ok) {
-      return { hookId, status: 'ok' };
+      const decision = normalizeHandlerDecision(result.value);
+      if (decision.status === 'blocked' || decision.status === 'failed') {
+        log(`Handler blocked execution: ${decision.message ?? 'policy decision'}`);
+        return {
+          hookId,
+          status: 'failed',
+          message: decision.message ?? 'Blocked by hook policy',
+          decision: decision.data,
+        };
+      }
+      if (decision.status === 'warned' || decision.status === 'warning') {
+        logForStrategy('warn', hookId)(decision.message ?? 'Handler returned warning');
+        return { hookId, status: 'warned', message: decision.message, decision: decision.data };
+      }
+      if (decision.status === 'skipped') {
+        return { hookId, status: 'skipped', message: decision.message, decision: decision.data };
+      }
+      return { hookId, status: 'ok', decision: decision.data };
     }
 
     if (result.timedOut) {
@@ -182,6 +255,46 @@ export async function runHook(hookId, options = {}) {
   }
 }
 
+function summarizeEventStatus(results) {
+  if (results.some(r => r.status === 'failed')) return 'failed';
+  if (results.some(r => r.status === 'warned')) return 'warned';
+  if (results.every(r => r.status === 'skipped')) return 'skipped';
+  return 'ok';
+}
+
+/**
+ * Run all hooks registered for a lifecycle event.
+ *
+ * @param {string} eventName
+ * @param {object} [options]
+ * @param {string} [options.hooksDir] - Directory containing hooks.json and handlers/
+ * @param {string} [options.platform] - Override platform detection
+ * @param {unknown} [options.payload] - Event payload passed to handlers
+ * @returns {Promise<{event: string, status: string, results: Array<object>, message?: string}>}
+ */
+export async function runHookEvent(eventName, options = {}) {
+  const hooksDir = options.hooksDir ?? __dirname;
+  const platform = options.platform ?? detectPlatform();
+  const hooks = loadHooks(hooksDir);
+  const eventHooks = listHooksForEvent(hooks, eventName);
+
+  if (eventHooks.length === 0) {
+    return {
+      event: eventName,
+      status: 'skipped',
+      results: [],
+      message: `No hooks registered for event "${eventName}"`,
+    };
+  }
+
+  const results = [];
+  for (const hook of eventHooks) {
+    results.push(await executeHook(hook, hook.id, { ...options, hooksDir, platform, eventName }));
+  }
+
+  return { event: eventName, status: summarizeEventStatus(results), results };
+}
+
 /**
  * CLI entry point: node run-hook.js <hook-id>
  */
@@ -189,21 +302,23 @@ const isMain = process.argv[1] &&
   (process.argv[1].endsWith('run-hook.js') || process.argv[1].endsWith('run-hook'));
 
 if (isMain) {
-  const hookId = process.argv[2];
-  if (!hookId) {
-    console.error('Usage: node run-hook.js <hook-id>');
+  const arg = process.argv[2];
+  if (!arg) {
+    console.error('Usage: node run-hook.js <hook-id> | --event <event-name>');
     process.exit(1);
   }
 
-  const result = await runHook(hookId);
+  const result = arg === '--event'
+    ? await runHookEvent(process.argv[3])
+    : await runHook(arg);
 
   if (result.status === 'failed') {
-    console.error(`Hook "${hookId}" failed: ${result.message}`);
+    console.error(`Hook "${arg}" failed: ${result.message ?? 'event hook failed'}`);
     process.exit(1);
   }
 
   if (result.status === 'skipped' && result.message?.includes('not found')) {
-    console.warn(`Hook "${hookId}" not found`);
+    console.warn(`Hook "${arg}" not found`);
     process.exit(1);
   }
 }

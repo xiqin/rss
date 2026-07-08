@@ -161,6 +161,34 @@ export class PipelineStateStore {
     return state;
   }
 
+  /** 标记当前终止阶段已完成，避免 terminal advance 重复记录历史 */
+  completeCurrentStage(meta = {}) {
+    const state = this.read();
+    if (!state) return null;
+
+    state.metadata ||= {};
+    const alreadyCompleted = state.metadata.completed === true && state.metadata.completed_stage === state.current_stage;
+    if (!alreadyCompleted) {
+      const completedAt = now();
+      state.stage_history.push({
+        stage: state.current_stage,
+        entered_at: state.current_stage_started_at || state.started_at,
+        exited_at: completedAt,
+        status: 'passed',
+        terminal: true,
+        ...meta.history
+      });
+      state.metadata.completed = true;
+      state.metadata.completed_stage = state.current_stage;
+      state.metadata.completed_at = completedAt;
+      state.updated_at = completedAt;
+      writeJSON(this.statePath, state, this.fs);
+      this._rebuildProgress();
+    }
+
+    return { state, alreadyCompleted };
+  }
+
   /** 标记当前阶段失败 */
   fail(reason, fromStage = null) {
     const state = this.read();

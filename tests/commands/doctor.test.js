@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { checkSubagentContextStale } from '../../src/commands/doctor.js';
+import { checkSubagentContextStale, diagnoseVersionProbe, getAdapterContractDiagnostics } from '../../src/commands/doctor.js';
 
 const TEST_DIR = join(import.meta.dirname, '__test_doctor__');
 
@@ -24,6 +24,7 @@ describe('doctor command', () => {
       getSkillsDir: () => join(TEST_DIR, '.claude', 'skills'),
       getCommandsDir: () => null,
       supportsPlugin: () => false,
+      capabilities: { hooks: true, skills: false, commands: false, plugin: true, mcpConfig: true },
     };
 
     vi.doMock('../../src/core/installer.js', () => ({
@@ -50,6 +51,7 @@ describe('doctor command', () => {
       getSkillsDir: () => join(TEST_DIR, '.claude', 'skills'),
       getCommandsDir: () => null,
       supportsPlugin: () => false,
+      capabilities: { hooks: true, skills: false, commands: false, plugin: true, mcpConfig: true },
     };
 
     vi.doMock('../../src/core/installer.js', () => ({
@@ -63,6 +65,17 @@ describe('doctor command', () => {
     const output = sp.mock.calls.map(c => c[0]).join('\n');
     expect(output).toContain('loom doctor');
     expect(output).toContain('1 skill(s)');
+    expect(output).toContain('contract: ✓ capabilities match');
+    expect(output).toContain('config surfaces: settings.json, .claudeignore, plugin marketplace');
+    expect(output).toContain('managed artifacts: plugin registration, mcpServers.loom, mcpServers.codegraph, .claudeignore');
+    expect(output).toContain('install side effects:');
+    expect(output).toContain('uninstall side effects:');
+    expect(output).toContain('mcp servers: loom local required @ settings.json#mcpServers.loom; codegraph local optional @ settings.json#mcpServers.codegraph');
+    expect(output).toContain('directory layout: plugins user plugin marketplace/loom registered; config user ./settings.json managed; ignore user ./.claudeignore generated-if-managed');
+    expect(output).toContain('permissions: fs read-write user settings.json; fs write-if-managed user .claudeignore');
+    expect(output).toContain('cmd execute install claude plugin marketplace add');
+    expect(output).toContain('cmd execute uninstall claude plugin uninstall');
+    expect(output).toContain('hook handlers: SessionStart:session-start local-script optional warn; PreToolUse:pre-tool-use-audit local-script blocking error');
     sp.mockRestore();
   });
 
@@ -90,6 +103,161 @@ describe('doctor command', () => {
     expect(output).toContain('loom doctor');
     expect(output).toContain('1 skill(s)');
     sp.mockRestore();
+  });
+
+  it('outputs machine-readable JSON diagnostics', async () => {
+    const skillsDir = join(TEST_DIR, '.claude', 'skills', 'test-skill');
+    mkdirSync(skillsDir, { recursive: true });
+    writeFileSync(join(skillsDir, 'SKILL.md'), '# Test');
+    mkdirSync(join(TEST_DIR, '.loom', 'rules'), { recursive: true });
+    mkdirSync(join(TEST_DIR, '.loom', 'memory'), { recursive: true });
+    writeFileSync(join(TEST_DIR, '.loom', 'rules', 'constitution.md'), '# Rules');
+    writeFileSync(join(TEST_DIR, '.loom', 'workflow.yaml'), 'steps: []\n');
+    writeFileSync(join(TEST_DIR, '.loom', 'memory', 'MEMORY.md'), '# Memory');
+
+    const mockAdapter = {
+      toolName: 'claude-code',
+      getUserDir: () => join(TEST_DIR, '.claude'),
+      getSkillsDir: () => join(TEST_DIR, '.claude', 'skills'),
+      getCommandsDir: () => null,
+      supportsPlugin: () => false,
+      capabilities: { hooks: true, skills: false, commands: false, plugin: true, mcpConfig: true },
+    };
+
+    vi.doMock('../../src/core/installer.js', () => ({
+      getUserAdapter: async () => mockAdapter,
+      USER_TOOL_IDS: ['claude-code'],
+    }));
+
+    vi.spyOn(process, 'cwd').mockReturnValue(TEST_DIR);
+    const sp = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { default: doctor } = await import('../../src/commands/doctor.js');
+    await doctor({ tool: 'claude-code', json: true });
+
+    expect(sp).toHaveBeenCalledTimes(1);
+    const report = JSON.parse(sp.mock.calls[0][0]);
+    expect(report.schema).toBe('loom.doctor.v1');
+    expect(report.project.root).toBe(TEST_DIR);
+    expect(report.project.exists).toBe(true);
+    expect(report.project.health.constitution.status).toBe('ok');
+    expect(report.project.health.workflow.status).toBe('ok');
+    expect(report.project.health.memory.status).toBe('ok');
+    expect(report.tools[0].id).toBe('claude-code');
+    expect(report.tools[0].installed).toBe(true);
+    expect(report.tools[0].skills.count).toBe(1);
+    expect(report.tools[0].contract.capabilitiesMatch).toBe(true);
+    sp.mockRestore();
+  });
+
+  it('writes a non-mutating doctor fix plan', async () => {
+    mkdirSync(join(TEST_DIR, '.loom', 'rules'), { recursive: true });
+    writeFileSync(join(TEST_DIR, '.loom', 'rules', 'constitution.md'), '# {{PROJECT_NAME}}');
+
+    const mockAdapter = {
+      toolName: 'claude-code',
+      getUserDir: () => join(TEST_DIR, '.claude'),
+      getSkillsDir: () => join(TEST_DIR, '.claude', 'skills'),
+      getCommandsDir: () => null,
+      supportsPlugin: () => false,
+      capabilities: { hooks: true, skills: false, commands: false, plugin: true, mcpConfig: true },
+    };
+
+    vi.doMock('../../src/core/installer.js', () => ({
+      getUserAdapter: async () => mockAdapter,
+      USER_TOOL_IDS: ['claude-code'],
+    }));
+
+    vi.spyOn(process, 'cwd').mockReturnValue(TEST_DIR);
+    const sp = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { default: doctor } = await import('../../src/commands/doctor.js');
+    const result = await doctor({ tool: 'claude-code', fixPlan: true, json: true });
+
+    const planPath = join(TEST_DIR, '.loom', 'doctor', 'fix-plan.json');
+    expect(result.fixPlan.path).toBe(planPath);
+    expect(existsSync(planPath)).toBe(true);
+    expect(existsSync(join(TEST_DIR, '.loom', 'workflow.yaml'))).toBe(false);
+
+    const plan = JSON.parse(readFileSync(planPath, 'utf-8'));
+    expect(plan.schema).toBe('loom.doctor-fix-plan.v1');
+    expect(plan.safety).toMatchObject({ autoApply: false, mutatesFiles: false, requiresReview: true });
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      id: 'install-claude-code',
+      command: 'loom install --tool claude-code',
+      risk: 'medium',
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      id: 'render-constitution',
+      status: 'manual-review',
+      target: join(TEST_DIR, '.loom', 'rules', 'constitution.md'),
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      id: 'create-workflow',
+      command: 'loom init-project',
+    }));
+    expect(plan.actions).toContainEqual(expect.objectContaining({
+      id: 'create-memory',
+      command: 'loom init-project',
+    }));
+    expect(sp).toHaveBeenCalledTimes(1);
+    const output = JSON.parse(sp.mock.calls[0][0]);
+    expect(output.fixPlan.schema).toBe('loom.doctor-fix-plan.v1');
+    sp.mockRestore();
+  });
+
+  it('diagnoses adapter contract capability mismatches', () => {
+    const diagnostics = getAdapterContractDiagnostics('copilot', {
+      capabilities: {
+        hooks: false,
+        skills: true,
+        commands: true,
+        plugin: false,
+        mcpConfig: false,
+        globalInstructions: true,
+      },
+    });
+
+    expect(diagnostics.capabilitiesMatch).toBe(false);
+    expect(diagnostics.mismatches).toContain('templates: expected true, got undefined');
+  });
+
+  it('diagnoses adapter contract version probes', () => {
+    const diagnostics = getAdapterContractDiagnostics('opencode', {
+      capabilities: {
+        hooks: false,
+        skills: true,
+        commands: true,
+        plugin: true,
+        mcpConfig: true,
+        templates: true,
+      },
+    }, {
+      runVersionProbe: () => 'opencode 1.2.3',
+    });
+
+    expect(diagnostics.version.status).toBe('ok');
+    expect(diagnostics.version.version).toBe('1.2.3');
+  });
+
+  it('reports unavailable and outdated version probes', () => {
+    const unavailable = diagnoseVersionProbe({
+      command: 'missing-tool',
+      args: ['--version'],
+      installHint: 'Install missing-tool.',
+    }, () => {
+      throw new Error('not found');
+    });
+    expect(unavailable.status).toBe('unavailable');
+    expect(unavailable.message).toBe('Install missing-tool.');
+
+    const outdated = diagnoseVersionProbe({
+      command: 'tool',
+      args: ['--version'],
+      versionPattern: '(\\d+\\.\\d+\\.\\d+)',
+      minimumVersion: '2.0.0',
+    }, () => 'tool 1.5.0');
+    expect(outdated.status).toBe('outdated');
+    expect(outdated.version).toBe('1.5.0');
+    expect(outdated.message).toContain('below recommended 2.0.0');
   });
 });
 

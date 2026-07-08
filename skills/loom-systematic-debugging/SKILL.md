@@ -4,6 +4,9 @@ description: >
   Structured debugging when facing bugs, test failures, or unexpected runtime behavior.
   Follows a phased approach: reproduce → gather info → hypothesize → verify → fix.
   Use when: diagnosing bugs, failing tests, flaky behavior, or unexplained runtime errors.
+when_to_use: Diagnose bugs, failing tests, flaky behavior, or unexplained runtime errors through a structured loop.
+argument-hint: <failure or symptom>
+user-invocable: true
 ---
 
 # 系统化调试

@@ -68,6 +68,9 @@ program
   .command('doctor')
   .description('Diagnose loom installation and project health')
   .option('--tool <target>', 'Target tool (auto-detect if omitted)')
+  .option('--json', 'Output machine-readable JSON diagnostics')
+  .option('--fix-plan', 'Write a non-mutating doctor fix plan')
+  .option('--fix-plan-out <path>', 'Doctor fix plan output path', '.loom/doctor/fix-plan.json')
   .action(async (options) => {
     const { default: doctor } = await import('./commands/doctor.js');
     await doctor(options);
@@ -104,10 +107,28 @@ program
   .option('--type <pipeline>', 'Pipeline type for init: feature|bugfix|hotfix|refactor|quickfix|chore|qa')
   .option('--auto', 'AI 自主选择模式：分析需求后选择 steps，覆盖 --type')
   .option('--request <text>', '需求描述（配合 --auto 使用）')
+  .option('--no-reports', 'Skip automatic completion reports when terminal stage completes')
+  .option('--pr-evidence', 'Generate PR evidence when terminal stage completes')
+  .option('--dashboard', 'Generate dashboard when terminal stage completes')
+  .option('--hash-artifacts', 'Hash existing evidence artifacts in completion reports')
   .option('--force', 'Override spec lock')
   .action(async (options) => {
     const { default: runCommand } = await import('./commands/run.js');
     await runCommand(options);
+  });
+
+program
+  .command('finalize')
+  .description('Generate completion reports for a finished loom spec')
+  .requiredOption('--spec-dir <path>', 'Path to spec directory')
+  .option('--cwd <path>', 'Project root')
+  .option('--no-reports', 'Skip report generation')
+  .option('--pr-evidence', 'Generate PR evidence summary')
+  .option('--dashboard', 'Generate dashboard HTML and JSON')
+  .option('--hash-artifacts', 'Hash existing evidence artifacts')
+  .action(async (options) => {
+    const { default: finalizeCommand } = await import('./commands/finalize.js');
+    await finalizeCommand(options);
   });
 
 program
@@ -132,6 +153,162 @@ program
   .action(async (options) => {
     const { default: statusCommand } = await import('./commands/status.js');
     await statusCommand(options);
+  });
+
+program
+  .command('evidence')
+  .description('Show normalized evidence records from compliance history')
+  .option('--cwd <path>', 'Project root')
+  .option('--limit <n>', 'Max evidence records', '50')
+  .option('--type <type>', 'Filter by evidence type')
+  .option('--risk <risk>', 'Filter by risk: low | medium | high')
+  .option('--verdict <verdict>', 'Filter by verdict: PASS | WARN | FAIL')
+  .option('--spec-dir <path>', 'Filter by spec directory')
+  .option('--json', 'JSON output')
+  .option('--jsonl', 'JSON Lines output')
+  .option('--raw', 'Include raw compliance records in JSON output')
+  .option('--hash-artifacts', 'Add sha256 hashes for existing artifact files')
+  .option('--trends', 'Output trend metrics instead of evidence records')
+  .option('--top <n>', 'Top N failure reasons for --trends', '5')
+  .option('--format <format>', 'Export format with --out: json | jsonl | markdown | html')
+  .option('--out <path>', 'Write evidence export to a file instead of stdout')
+  .action(async (options) => {
+    const { default: evidenceCommand } = await import('./commands/evidence.js');
+    await evidenceCommand(options);
+  });
+
+program
+  .command('dashboard')
+  .description('Generate a local HTML team dashboard from evidence and memory')
+  .option('--cwd <path>', 'Project root')
+  .option('--out <path>', 'Output HTML path', '.loom/reports/team-dashboard.html')
+  .option('--spec-dir <path>', 'Filter dashboard by spec directory')
+  .option('--limit <n>', 'Max recent evidence and memory items', '10')
+  .option('--repos <paths>', 'Comma-separated repository roots to aggregate')
+  .option('--web', 'Also write static JSON data and add browser refresh metadata')
+  .option('--data-out <path>', 'Dashboard JSON data path')
+  .option('--refresh <seconds>', 'Static web dashboard refresh interval', '15')
+  .action(async (options) => {
+    const { default: dashboardCommand } = await import('./commands/dashboard.js');
+    await dashboardCommand(options);
+  });
+
+const pluginsCmd = program
+  .command('plugins')
+  .description('Discover loom plugin manifests and extension points');
+
+pluginsCmd
+  .command('list')
+  .description('List .loom/plugins/*.json manifests')
+  .option('--cwd <path>', 'Project root')
+  .option('--dir <path>', 'Plugin manifest directory', '.loom/plugins')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    const { default: pluginsCommand } = await import('./commands/plugins.js');
+    await pluginsCommand('list', options);
+  });
+
+pluginsCmd
+  .command('marketplace-template')
+  .description('Write a remote MCP marketplace template')
+  .option('--cwd <path>', 'Project root')
+  .option('--out <path>', 'Marketplace template path', '.loom/marketplace/mcp-marketplace.json')
+  .option('--name <name>', 'Marketplace display name')
+  .option('--id <id>', 'Remote MCP server id')
+  .option('--server-name <name>', 'Remote MCP server display name')
+  .option('--url <url>', 'Remote MCP endpoint URL')
+  .option('--transport <type>', 'Remote MCP transport', 'streamable-http')
+  .option('--force', 'Overwrite an existing template')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    const { default: pluginsCommand } = await import('./commands/plugins.js');
+    await pluginsCommand('marketplace-template', options);
+  });
+
+pluginsCmd
+  .command('marketplace-sync')
+  .description('Write a local audit plan for a remote MCP marketplace template')
+  .option('--cwd <path>', 'Project root')
+  .option('--source <path>', 'Marketplace template input path', '.loom/marketplace/mcp-marketplace.json')
+  .option('--out <path>', 'Marketplace sync plan output path', '.loom/marketplace/mcp-marketplace.sync.json')
+  .option('--audit-out <path>', 'Marketplace sync audit JSONL output path', '.loom/compliance/marketplace-sync.jsonl')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    const { default: pluginsCommand } = await import('./commands/plugins.js');
+    const result = await pluginsCommand('marketplace-sync', options);
+    if (result.plan?.verdict === 'FAIL') process.exitCode = 1;
+  });
+
+pluginsCmd
+  .command('plan')
+  .description('Write a declarative plugin execution plan without loading plugin code')
+  .option('--cwd <path>', 'Workspace root', process.cwd())
+  .option('--dir <path>', 'Plugin manifest directory', '.loom/plugins')
+  .option('--out <path>', 'Output plan path', '.loom/plugins/plugin-plan.json')
+  .option('--json', 'JSON output')
+  .action(async (options) => {
+    const { default: pluginsCommand } = await import('./commands/plugins.js');
+    await pluginsCommand('plan', options);
+  });
+
+const prCmd = program
+  .command('pr')
+  .description('Create pull request artifacts from loom state and evidence');
+
+prCmd
+  .command('evidence')
+  .description('Write a Markdown evidence summary for pull requests')
+  .option('--cwd <path>', 'Project root')
+  .option('--out <path>', 'Output Markdown path', '.loom/evidence/pr-evidence.md')
+  .option('--limit <n>', 'Max evidence records', '50')
+  .option('--type <type>', 'Filter by evidence type')
+  .option('--risk <risk>', 'Filter by risk: low | medium | high')
+  .option('--verdict <verdict>', 'Filter by verdict: PASS | WARN | FAIL')
+  .option('--spec-dir <path>', 'Filter by spec directory')
+  .option('--raw', 'Include raw compliance records in generated Markdown')
+  .option('--hash-artifacts', 'Add sha256 hashes for existing artifact files')
+  .action(async (options) => {
+    const { default: prCommand } = await import('./commands/pr.js');
+    await prCommand('evidence', options);
+  });
+
+const policyCmd = program
+  .command('policy')
+  .description('Enterprise policy checks for sensitive paths, secrets and audit records');
+
+policyCmd
+  .command('check')
+  .description('Scan files against .loom/policy.json and write a JSONL audit record')
+  .option('--cwd <path>', 'Project root')
+  .option('--policy <path>', 'Policy file path', '.loom/policy.json')
+  .option('--files <csv>', 'Comma-separated files to scan')
+  .option('--file <path>', 'Single file to scan')
+  .option('--out <path>', 'Audit JSONL output path', '.loom/compliance/policy-audit.jsonl')
+  .action(async (options) => {
+    const { default: policyCommand } = await import('./commands/policy.js');
+    const result = await policyCommand('check', options);
+    if (result.verdict === 'FAIL') process.exitCode = 1;
+  });
+
+const issueCmd = program
+  .command('issue')
+  .description('Import GitHub issue metadata into loom specs');
+
+issueCmd
+  .command('import')
+  .description('Create specs/<date+slug>/spec.md from a GitHub issue title/body')
+  .requiredOption('--title <text>', 'GitHub issue title')
+  .option('--body <text>', 'GitHub issue body')
+  .option('--body-file <path>', 'Read GitHub issue body from a file')
+  .option('--number <n>', 'GitHub issue number')
+  .option('--url <url>', 'GitHub issue URL')
+  .option('--slug <name>', 'Feature slug (default: derived from title)')
+  .option('--date <yyyy-mm-dd>', 'Spec date prefix (default: today)')
+  .option('--cwd <path>', 'Project root')
+  .option('--force', 'Overwrite existing spec.md')
+  .action(async (options) => {
+    const { default: issueCommand } = await import('./commands/issue.js');
+    await issueCommand('import', options);
   });
 
 const handoffCmd = program
@@ -202,6 +379,17 @@ memoryCmd
   .option('--context <text>', 'Background reason (for ADRs)')
   .option('--author <name>', 'Author name')
   .option('--tags <csv>', 'Comma-separated tags')
+  .option('--source <text>', 'Source of this memory, e.g. issue, PR, review, session')
+  .option('--confidence <number>', 'Confidence from 0 to 1')
+  .option('--scope <scope>', 'Applicability scope, e.g. project | spec | file | team')
+  .option('--expires-at <iso>', 'Expiration timestamp for temporary memory')
+  .option('--spec-dir <path>', 'Related spec directory')
+  .option('--pr <id>', 'Related pull request id or URL')
+  .option('--commit <sha>', 'Related commit SHA')
+  .option('--task <id>', 'Related task id')
+  .option('--handoff <path>', 'Related handoff artifact')
+  .option('--stage <stage>', 'Related pipeline stage')
+  .option('--files <csv>', 'Related file paths')
   .option('--cwd <path>', 'Project root')
   .action(async (options) => {
     const { default: memoryCommand } = await import('./commands/memory.js');
@@ -213,6 +401,16 @@ memoryCmd
   .description('List memory entries')
   .option('--type <type>', 'Filter by type')
   .option('--author <name>', 'Filter by author')
+  .option('--tag <tag>', 'Filter by tag')
+  .option('--scope <scope>', 'Filter by applicability scope')
+  .option('--stage <stage>', 'Filter by pipeline stage')
+  .option('--file <path>', 'Filter by related file path')
+  .option('--spec-dir <path>', 'Filter by related spec directory')
+  .option('--pr <id>', 'Filter by related pull request')
+  .option('--commit <sha>', 'Filter by related commit')
+  .option('--task <id>', 'Filter by related task id')
+  .option('--handoff <path>', 'Filter by related handoff artifact')
+  .option('--include-expired', 'Include expired memory entries')
   .option('--limit <n>', 'Max entries', '20')
   .option('--json', 'JSON output')
   .option('--cwd <path>', 'Project root')

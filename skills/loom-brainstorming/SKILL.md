@@ -3,6 +3,9 @@ name: loom-brainstorming
 description: >
   Explore 2-3 implementation options with trade-offs when the user describes a new feature or requirement.
   Use when: the user asks for a new feature design, implementation options, or technical trade-off analysis.
+when_to_use: Explore implementation options, trade-offs, or requirements for a new feature before writing a plan.
+argument-hint: <feature request or product idea>
+user-invocable: true
 ---
 
 # 需求头脑风暴

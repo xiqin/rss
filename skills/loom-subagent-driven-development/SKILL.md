@@ -3,6 +3,9 @@ name: loom-subagent-driven-development
 description: >
   Execute plan tasks via isolated subagents with reviewer checkpoints. Handles DONE/BLOCKED/NEEDS_CONTEXT states.
   Use when: a confirmed plan should be implemented through isolated subagents with reviewer checkpoints.
+when_to_use: Execute a confirmed plan through isolated subagents with reviewer checkpoints.
+argument-hint: <spec_dir>
+user-invocable: true
 ---
 
 # Subagent 编码执行

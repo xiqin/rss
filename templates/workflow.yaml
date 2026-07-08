@@ -22,6 +22,22 @@ defaults:
   max_retries: 3 # subagent 全局最大重试次数（可被 step 覆盖）
   timeout_minutes: 30 # 单个 step 超时时间（分钟）
 
+reporting:
+  on_complete:
+    enabled: true
+    evidence:
+      enabled: true
+      format: markdown
+      trends: true
+      hash_artifacts: true
+    pr_evidence:
+      enabled: false # PR/CI 场景可设为 true，或用 `loom run --pr-evidence`
+    dashboard:
+      enabled: false # 团队看板/发布场景可设为 true，或用 `loom run --dashboard`
+      web: true
+    memory_export:
+      enabled: true
+
 # ─────────────────────────────────────────
 # 流水线定义
 # ─────────────────────────────────────────

@@ -5,6 +5,9 @@ description: >
   then select pipeline steps via rule short-circuit / AI fallback / rule-based fallback.
   Select steps first, expose the choice to the user, and persist selected dynamic_steps only after explicit user confirmation; pipeline-plan.md is optional for manual review.
   Use when: user is unsure which pipeline type to pick, or wants AI to choose steps automatically.
+when_to_use: Select safe pipeline steps for a development request, then wait for explicit confirmation before persisting them.
+argument-hint: <user request>
+user-invocable: true
 ---
 
 # AI 自主流程选择

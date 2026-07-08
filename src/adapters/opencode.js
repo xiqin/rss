@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { BaseAdapter } from './base.js';
+import { BaseAdapter, codegraphMcpDescriptor } from './base.js';
 import { readJsonConfig } from './config-utils.js';
 
 export class OpenCodeAdapter extends BaseAdapter {
@@ -124,6 +124,7 @@ export class OpenCodeAdapter extends BaseAdapter {
     let config = readJsonConfig(configPath, { log, label: 'mcp', name: 'opencode.json' });
 
     if (!config.mcp) config.mcp = {};
+    let changed = false;
 
     if (config.mcp.loom) {
       if (config.mcp.loom.env) {
@@ -132,24 +133,42 @@ export class OpenCodeAdapter extends BaseAdapter {
           ...(config.mcp.loom.environment || {}),
         };
         delete config.mcp.loom.env;
-        mkdirSync(dirname(configPath), { recursive: true });
-        writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+        changed = true;
         log.push('  mcp: migrated loom env to environment in opencode.json');
       }
       log.push('  mcp: loom server already configured');
-      return;
+    } else {
+      config.mcp.loom = {
+        type: 'local',
+        command: ['loom', 'mcp-serve'],
+        enabled: true,
+        environment: { LOOM_LAZY_TOOLS: '1' },
+      };
+      changed = true;
+      log.push('  mcp: loom server added to opencode.json');
     }
 
-    config.mcp.loom = {
-      type: 'local',
-      command: ['loom', 'mcp-serve'],
-      enabled: true,
-      environment: { LOOM_LAZY_TOOLS: '1' },
-    };
+    if (config.mcp.codegraph) {
+      log.push('  mcp: codegraph server already configured');
+    } else {
+      const codegraph = codegraphMcpDescriptor();
+      if (codegraph) {
+        config.mcp.codegraph = {
+          type: 'local',
+          command: [codegraph.command, ...codegraph.args],
+          enabled: true,
+        };
+        changed = true;
+        log.push('  mcp: codegraph server added to opencode.json');
+      } else {
+        log.push('  mcp: codegraph CLI not found, codegraph indexing disabled');
+      }
+    }
 
-    mkdirSync(dirname(configPath), { recursive: true });
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-    log.push('  mcp: loom server added to opencode.json');
+    if (changed) {
+      mkdirSync(dirname(configPath), { recursive: true });
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    }
   }
 
   _removeMcpConfig(log) {
@@ -162,11 +181,23 @@ export class OpenCodeAdapter extends BaseAdapter {
       log.push(`  mcp: opencode.json 解析失败 (${e.message})，跳过移除`);
       return;
     }
-    if (!config.mcp?.loom) return;
+    if (!config.mcp) return;
 
-    delete config.mcp.loom;
-    if (Object.keys(config.mcp).length === 0) delete config.mcp;
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
-    log.push('  mcp: loom server removed from opencode.json');
+    let changed = false;
+    if (config.mcp.loom) {
+      delete config.mcp.loom;
+      changed = true;
+      log.push('  mcp: loom server removed from opencode.json');
+    }
+    if (config.mcp.codegraph) {
+      delete config.mcp.codegraph;
+      changed = true;
+      log.push('  mcp: codegraph server removed from opencode.json');
+    }
+
+    if (changed) {
+      if (Object.keys(config.mcp).length === 0) delete config.mcp;
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    }
   }
 }

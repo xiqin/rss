@@ -21,6 +21,9 @@ loom uninstall --tool claude-code
 | `~/.cursor/rules/`                   | Cursor `.mdc` 规则文件             |
 | `~/.copilot/skills/`                 | Copilot skills                     |
 | `~/.copilot/copilot-instructions.md` | Copilot 全局指令                   |
+| `.github/copilot-instructions.md`    | Copilot 仓库级 custom instructions（仅当前工作目录） |
+| `.github/workflows/copilot-setup-steps.yml` | Copilot cloud agent setup workflow（仅当前工作目录） |
+| `.github/workflows/loom-verify.yml`  | Loom PR/Push 验证 workflow（仅当前工作目录） |
 | `~/.codex/skills/`                   | Codex skills                       |
 | `~/.codex/config.toml`               | Codex MCP 配置中的 loom section     |
 | Plugin 注册                          | Claude Code / OpenCode plugin 注册 |
@@ -29,7 +32,7 @@ loom uninstall --tool claude-code
 
 卸载**不会**触及：
 
-- 任何项目目录下的文件
+- 任何非 loom 生成的项目目录文件
 - 非 loom 生成的文件
 - 用户主目录下非 loom 管理的文件
 

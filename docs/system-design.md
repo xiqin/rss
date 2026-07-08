@@ -1,6 +1,6 @@
 # Loom 系统设计文档
 
-> 基于代码反向工程生成 | v2.2.0 | 2026-06-08
+> 基于代码反向工程生成 | v2.4.0 | 2026-07-07
 
 ---
 
@@ -22,8 +22,8 @@ Loom 是 AI 工程化框架，基于**技能（Skill）+ 流水线（Pipeline）
 
 ### 1.3 技术栈
 
-- **运行时**：Node.js >= 18，ESM 模块
-- **依赖**：commander ^12.0.0（CLI），js-yaml ^4.2.0（YAML 解析）
+- **运行时**：Node.js >= 22，ESM 模块
+- **依赖**：commander ^14.0.0（CLI），js-yaml ^4.2.0（YAML 解析）
 - **协议**：MCP（Model Context Protocol）JSON-RPC 2.0 over stdio
 - **测试**：Vitest ^4.1.8 + v8 覆盖率
 - **持久化**：JSON 文件 + 文件系统（无数据库）
@@ -43,7 +43,7 @@ Loom 是 AI 工程化框架，基于**技能（Skill）+ 流水线（Pipeline）
 ┌──────────────▼────────┐ ┌───────▼──────────────────┐
 │    MCP Server 层       │ │     CLI 层               │
 │  server.js             │ │  cli.js (commander)       │
-│  tools.js (15工具)     │ │  commands/*.js (14命令)   │
+│  tools.js (17工具)     │ │  commands/*.js (21命令)   │
 │  session-store.js      │ │                           │
 └──────────┬────────────┘ └───────────┬───────────────┘
            │                          │
@@ -75,6 +75,7 @@ Loom 是 AI 工程化框架，基于**技能（Skill）+ 流水线（Pipeline）
 | CLI | commands/mcp-serve.js | 启动 MCP 服务器 |
 | CLI | commands/start.js | 输出项目 loom 状态和上下文 |
 | CLI | commands/status.js | 显示流水线当前状态 |
+| CLI | commands/evidence.js | 从 compliance history 导出统一 evidence 视图 |
 | CLI | commands/handoff.js | 写入阶段或任务 handoff |
 | CLI | commands/tasks.js | 分析任务文件归属 |
 | CLI | commands/index.js | 同步 codegraph 图索引 |
@@ -86,6 +87,7 @@ Loom 是 AI 工程化框架，基于**技能（Skill）+ 流水线（Pipeline）
 | Core | state-store.js | 流水线状态 + 任务状态持久化（JSON 文件），支持 dynamic_steps |
 | Core | artifact-checker.js | 产物完整性检查（存在性 + 占位符扫描） |
 | Core | compliance-tracker.js | 合规率追踪和历史记录 |
+| Core | evidence-store.js | compliance history 到 `loom.evidence.v1` 的规范化、过滤、汇总、JSONL 导出、报告渲染和趋势指标 |
 | Core | memory-store.js | 结构化记忆 CRUD + Markdown 导出 |
 | Core | skill-loader.js | SKILL.md 渐进式披露（L0 摘要 / L1 全文） |
 | Core | context-index.js | 上下文文件渐进式披露（outline / section） |
@@ -151,7 +153,7 @@ Level 3（顶层）:  pipeline-engine（→ state-store, lock, artifact-checker,
 │   ├── MEMORY.md            # 只读导出视图
 │   └── sessions/            # 会话归档
 ├── compliance/
-│   └── history.json         # 合规率历史（最多 500 条）
+│   └── history.json         # 合规率历史（最多 500 条），evidence-store 的输入
 └── rules/
     └── constitution.md      # 项目宪章，包含架构和目录结构
 
@@ -266,7 +268,7 @@ specs/<date+feature>/
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | string | 8 位 UUID，唯一 | 条目标识 |
-| type | enum | user/feedback/project/reference | 记忆类型 |
+| type | string | 常用值：决策/踩坑/偏好/状态/adr | 记忆类型，当前实现允许自定义字符串 |
 | content | string | 必填 | 记忆内容 |
 | author | string | 自动检测（git config user.name） | 作者 |
 | tags | array | 可选 | 标签 |
@@ -276,10 +278,10 @@ specs/<date+feature>/
 
 | 文件 | 实体 | 核心字段 |
 |------|------|----------|
-| hooks.schema.json | Hook | id, entry, platforms, timeoutMs, blocking, idempotent, fallback(skip/warn/error/retry) |
+| hooks.schema.json | HookRegistry | lifecycleEvents, event-indexed hooks, id, entry, platforms, timeoutMs, blocking, idempotent, fallback(skip/warn/error/retry), policy, handler decision(ok/warned/skipped/blocked/failed), compliance audit history, user prompt risk suggestions, post-tool result audit, subagent/task/handoff links, task lifecycle artifacts, worktree cleanup status, compaction handoff, file-change sync suggestions |
 | pipeline.schema.json | PipelineState | states(8个), transitions(15条), progressFileFormat |
 | review.schema.json | ReviewDimension | architecture/code-quality/security/performance/conformance/impact-scope; Severity: BLOCKER/WARNING/SUGGESTION |
-| tools.schema.json | Tool | id, adapter, displayName, supportLevel, platforms, hooksSupport, entryFilename |
+| tools.schema.json | ToolContract | id, adapter, displayName, supportLevel, platforms, hooksSupport, entryFilename, contract(capabilities, installScopes, configSurfaces, managedArtifacts, versionProbe) |
 | model-selection.schema.json | Tier | mechanical/integration/architecture; Signal: condition→tier 映射 |
 | templates.schema.json | Template | id, sourceFile, outputPath, requiredVariables, optionalVariables |
 | shared-rules.json | Rule | id, heading, content, injectTo, notes |
@@ -292,13 +294,28 @@ specs/<date+feature>/
 
 | JSON-RPC 方法 | 功能 | 鉴权 |
 |---------------|------|------|
-| initialize | 握手初始化，返回协议版本和能力 | 无 |
+| initialize | 握手初始化，返回协议版本和 tools/resources/prompts 能力 | 无 |
 | notifications/initialized | 客户端初始化完成通知 | 无 |
-| tools/list | 列出可用工具（支持延迟加载过滤） | 无 |
+| tools/list | 列出可用工具（支持延迟加载过滤），每个工具携带 `annotations` 和 `loom` 风险元数据 | 无 |
 | tools/call | 调用指定工具 | 无 |
+| resources/list | 列出固定资源入口，例如 constitution、memory、skill catalog | 无 |
+| resources/templates/list | 列出模板化资源入口，例如 spec state、progress、handoff | 无 |
+| resources/read | 读取只读资源内容；当前支持 constitution、memory、skill catalog、spec state、progress、handoff | 无 |
+| prompts/list | 列出标准 Loom prompts，例如 feature 启动、写计划、验证、请求审查 | 无 |
+| prompts/get | 获取标准 prompt 消息模板，并校验必填参数 | 无 |
 | ping | 心跳检测 | 无 |
 
-**协议版本**：2025-03-26
+**协议版本**：默认 `2025-11-25`，兼容 `2025-06-18`
+
+**资源与提示可发现性**：`initialize` 声明 `resources` 和 `prompts` 能力；当前已实现 `resources/list`、`resources/templates/list`、`resources/read`、`prompts/list`、`prompts/get`。`resources/read` 覆盖 constitution、memory、skill catalog，以及模板化 spec 资源 `state`、`progress`、`handoffs/{id}`；spec 路径读取会经过项目根目录沙箱校验。
+
+**工具安全元数据**：
+
+- `annotations.readOnlyHint` / `destructiveHint` / `idempotentHint` / `openWorldHint` 对齐 MCP 工具注解习惯，供客户端做基础治理。
+- `loom.risk` 标记 `low` / `medium` / `high`。
+- `loom.effects` 标记读、会话状态、文件、流水线状态、审批或 workflow 影响。
+- `loom.writes` 列出可能写入的文件或状态对象。
+- `loom.requiresUserConfirmation` 标记需要明确用户确认的操作，或说明条件式确认规则。
 
 ### 4.2 MCP 工具清单
 
@@ -329,17 +346,24 @@ specs/<date+feature>/
 | loom install | | --tool \<targets\> | 安装到 AI 工具 |
 | loom update | | | 更新安装 |
 | loom uninstall | | --tool \<targets\> | 卸载 |
-| loom doctor | | | 诊断安装和项目健康 |
+| loom doctor | | --tool, --json, --fix-plan, --fix-plan-out | 诊断安装、adapter contract 一致性和项目健康；`--json` 输出 `loom.doctor.v1`，`--fix-plan` 写出非破坏性的 `loom.doctor-fix-plan.v1` 修复计划 |
 | loom list | | | 列出可用 skills 和 commands |
 | loom run | | --spec-dir, --advance, --compression-confirmed, --approve, --fail, --recover, --task, --task-status, --context, --verdict, --auto, --request, --approve-pipeline | 流水线执行引擎 |
 | loom select | | --spec-dir, --request, --json | AI 自主流程选择，可选输出 pipeline-plan.md 供人工审查 |
 | loom handoff write | | --spec-dir, --stage 或 --task, --status, --summary, --artifacts, --data | 写入阶段或任务 handoff，并刷新 progress.md |
 | loom status | | | 显示流水线状态 |
+| loom evidence | | --json, --jsonl, --type, --risk, --verdict, --spec-dir, --limit, --hash-artifacts, --format, --trends, --top, --out | 导出统一 evidence 视图，可附加 artifact sha256，写入 JSON/JSONL/Markdown/HTML 文件，并输出趋势指标 |
+| loom dashboard | | --out, --spec-dir, --limit, --repos, --web, --data-out, --refresh | 从一个或多个仓库的 evidence 与 memory 生成本地 HTML 团队看板；`--web` 额外写出 `loom.dashboard.v1` JSON 数据文件 |
+| loom plugins list | | --dir, --json | 发现 `.loom/plugins/*.json` manifest，并列出 step、adapter、hook、reporter 扩展点 |
+| loom plugins plan | | --dir, --out, --json | 生成 `loom.plugin-plan.v1` 声明式插件接入计划，不加载或执行第三方代码 |
+| loom plugins marketplace-template | | --out, --name, --id, --server-name, --url, --transport, --force, --json | 生成 remote MCP marketplace 配置模板，默认不覆盖已有文件 |
+| loom plugins marketplace-sync | | --source, --out, --audit-out, --json | 从 marketplace 模板生成本地同步计划和 JSONL 审计记录，不联网、不写客户端配置 |
+| loom policy check | | --policy, --files, --file, --out | 按 policy 扫描敏感路径和 secret，并写入 JSONL 审计记录 |
 | loom tasks | | --spec-dir | 分析任务归属 |
 | loom index | | | 同步 codegraph 图索引 |
 | loom start | | | 输出项目 loom 状态 |
-| loom memory add | | --type, --content | 添加记忆条目 |
-| loom memory list | | --type, --limit | 列出记忆条目 |
+| loom memory add | | --type, --content, --source, --confidence, --scope, --expires-at, --spec-dir, --pr, --commit, --task, --handoff, --stage, --files | 添加可追溯记忆条目 |
+| loom memory list | | --type, --tag, --scope, --stage, --file, --spec-dir, --pr, --commit, --task, --handoff, --include-expired, --limit | 按结构化元数据检索记忆条目 |
 | loom memory export | | | 导出 MEMORY.md |
 | loom memory merge | | --from | 合并存储 |
 | loom memory remove | | --id | 删除条目 |

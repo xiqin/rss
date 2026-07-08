@@ -3,6 +3,9 @@ name: loom-dispatching-parallel-agents
 description: >
   Dispatch multiple independent tasks to parallel subagents when no shared file conflicts exist.
   Use when: a confirmed plan has independent tasks that can run concurrently without touching shared files.
+when_to_use: Dispatch independent plan tasks in parallel only when dependency and file-conflict checks pass.
+argument-hint: <spec_dir or task list>
+user-invocable: true
 ---
 
 # 并行派发

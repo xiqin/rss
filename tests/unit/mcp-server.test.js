@@ -7,17 +7,19 @@ function frame(json) {
 
 function parseFrames(output) {
   const frames = [];
-  let rest = output;
-  while (rest.length > 0) {
-    const headerEnd = rest.indexOf('\r\n\r\n');
+  const buffer = Buffer.from(output, 'utf-8');
+  let offset = 0;
+  while (offset < buffer.length) {
+    const headerEnd = buffer.indexOf('\r\n\r\n', offset, 'utf-8');
     if (headerEnd === -1) break;
-    const header = rest.slice(0, headerEnd);
+    const header = buffer.subarray(offset, headerEnd).toString('utf-8');
     const match = header.match(/Content-Length:\s*(\d+)/i);
     if (!match) break;
     const start = headerEnd + 4;
     const end = start + Number(match[1]);
-    frames.push(JSON.parse(rest.slice(start, end)));
-    rest = rest.slice(end);
+    if (buffer.length < end) break;
+    frames.push(JSON.parse(buffer.subarray(start, end).toString('utf-8')));
+    offset = end;
   }
   return frames;
 }
@@ -96,5 +98,57 @@ describe('MCP stdio transport', () => {
     const [response] = parseFrames(stdout);
 
     expect(response.result.protocolVersion).toBe('2025-11-25');
+    expect(response.result.capabilities.resources).toEqual({ listChanged: false, subscribe: false });
+    expect(response.result.capabilities.prompts).toEqual({ listChanged: false });
+  });
+
+  it('lists resource and prompt catalogs', async () => {
+    const messages = [
+      { jsonrpc: '2.0', id: 1, method: 'resources/list' },
+      { jsonrpc: '2.0', id: 2, method: 'resources/templates/list' },
+      { jsonrpc: '2.0', id: 3, method: 'prompts/list' },
+    ].map(msg => frame(JSON.stringify(msg))).join('');
+
+    const { stdout } = await runServer(messages, output => parseFrames(output).length === 3);
+    const [resources, templates, prompts] = parseFrames(stdout);
+
+    expect(resources.result.resources.map(r => r.uri)).toContain('loom://context/constitution');
+    expect(templates.result.resourceTemplates.map(r => r.uriTemplate)).toContain('loom://spec/{spec_dir}/progress');
+    expect(prompts.result.prompts.map(p => p.name)).toContain('loom-verify-work');
+  });
+
+  it('reads skill catalog resources and rejects unknown resources', async () => {
+    const messages = [
+      { jsonrpc: '2.0', id: 1, method: 'resources/read', params: { uri: 'loom://skills/catalog' } },
+      { jsonrpc: '2.0', id: 2, method: 'resources/read', params: { uri: 'loom://unknown' } },
+    ].map(msg => frame(JSON.stringify(msg))).join('');
+
+    const { stdout } = await runServer(messages, output => parseFrames(output).length === 2);
+    const [catalog, unknown] = parseFrames(stdout);
+    const parsed = JSON.parse(catalog.result.contents[0].text);
+
+    expect(catalog.result.contents[0].uri).toBe('loom://skills/catalog');
+    expect(parsed.skills.map(s => s.name)).toContain('loom-using-loom');
+    expect(unknown.error.code).toBe(-32602);
+    expect(unknown.error.message).toMatch(/Unknown resource uri/);
+  });
+
+  it('returns prompt messages and validates required arguments', async () => {
+    const messages = [
+      { jsonrpc: '2.0', id: 1, method: 'prompts/get', params: { name: 'loom-verify-work', arguments: { spec_dir: 'specs/2026-07-07+demo' } } },
+      { jsonrpc: '2.0', id: 2, method: 'prompts/get', params: { name: 'loom-write-plan', arguments: {} } },
+    ].map(msg => frame(JSON.stringify(msg))).join('');
+
+    const { stdout } = await runServer(messages, output => parseFrames(output).length === 2);
+    const [prompt, invalid] = parseFrames(stdout);
+
+    expect(prompt.result.description).toMatch(/final compile/);
+    expect(prompt.result.messages[0]).toMatchObject({
+      role: 'user',
+      content: { type: 'text' },
+    });
+    expect(prompt.result.messages[0].content.text).toContain('specs/2026-07-07+demo');
+    expect(invalid.error.code).toBe(-32602);
+    expect(invalid.error.message).toMatch(/Missing required prompt argument: spec_dir/);
   });
 });

@@ -3,6 +3,9 @@ name: loom-writing-plans
 description: >
   Break a confirmed spec into ordered, independently-verifiable task files with dependency analysis.
   Use when: an approved spec must be decomposed into ordered, testable implementation tasks.
+when_to_use: Decompose an approved spec into ordered, independently verifiable implementation tasks.
+argument-hint: <spec_dir>
+user-invocable: true
 ---
 
 # 实现计划拆解

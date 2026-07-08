@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { TOOL_DEFINITIONS, executeToolCall } from './tools.js';
+import { TOOL_DEFINITIONS, executeToolCall, readMcpResource } from './tools.js';
 import { SessionStore } from './session-store.js';
 import { recordCall, printSummary } from './telemetry.js';
 
@@ -29,6 +29,130 @@ const SERVER_VERSION = (() => {
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18'];
 const PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
 
+const RESOURCE_DEFINITIONS = [
+  {
+    uri: 'loom://context/constitution',
+    name: 'Project constitution',
+    description: 'Project architecture, rules, and engineering constraints from .loom/rules/constitution.md',
+    mimeType: 'text/markdown',
+  },
+  {
+    uri: 'loom://memory',
+    name: 'Project memory',
+    description: 'Structured project memory export from .loom/memory/MEMORY.md',
+    mimeType: 'text/markdown',
+  },
+  {
+    uri: 'loom://skills/catalog',
+    name: 'Skill catalog',
+    description: 'L0 catalog of available Loom skills for progressive disclosure',
+    mimeType: 'application/json',
+  },
+];
+
+const RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'loom://context/{doc}',
+    name: 'Context document',
+    description: 'Context document by key, such as constitution or memory',
+    mimeType: 'text/markdown',
+  },
+  {
+    uriTemplate: 'loom://spec/{spec_dir}/state',
+    name: 'Pipeline state',
+    description: 'Pipeline state JSON for a spec directory',
+    mimeType: 'application/json',
+  },
+  {
+    uriTemplate: 'loom://spec/{spec_dir}/progress',
+    name: 'Pipeline progress',
+    description: 'Generated progress.md for a spec directory',
+    mimeType: 'text/markdown',
+  },
+  {
+    uriTemplate: 'loom://spec/{spec_dir}/handoffs/{id}',
+    name: 'Stage or task handoff',
+    description: 'Handoff JSON for a stage or task in a spec directory',
+    mimeType: 'application/json',
+  },
+];
+
+const PROMPT_DEFINITIONS = [
+  {
+    name: 'loom-start-feature',
+    title: 'Start Feature Pipeline',
+    description: 'Clarify a new feature request and prepare a Loom pipeline selection.',
+    arguments: [
+      { name: 'request', description: 'User feature request', required: true },
+    ],
+  },
+  {
+    name: 'loom-write-plan',
+    title: 'Write Implementation Plan',
+    description: 'Turn an approved spec into ordered, independently verifiable tasks.',
+    arguments: [
+      { name: 'spec_dir', description: 'Spec directory to plan', required: true },
+    ],
+  },
+  {
+    name: 'loom-verify-work',
+    title: 'Verify Work',
+    description: 'Run final compile, test, placeholder, and spec coverage verification.',
+    arguments: [
+      { name: 'spec_dir', description: 'Spec directory to verify', required: true },
+    ],
+  },
+  {
+    name: 'loom-request-review',
+    title: 'Request Code Review',
+    description: 'Prepare a review request with change summary, verification evidence, and focus areas.',
+    arguments: [
+      { name: 'spec_dir', description: 'Spec directory to summarize', required: true },
+    ],
+  },
+];
+
+const PROMPT_TEMPLATES = {
+  'loom-start-feature': ({ request }) => ({
+    description: 'Clarify a new feature request and prepare a Loom pipeline selection.',
+    required: ['request'],
+    text: [
+      'Start a Loom feature pipeline for this request.',
+      '',
+      `User request: ${request}`,
+      '',
+      'Use loom_list_capabilities first, then use the pipeline selector. Present the selected steps, source, risk level, and reasoning before initializing state.'
+    ].join('\n'),
+  }),
+  'loom-write-plan': ({ spec_dir }) => ({
+    description: 'Turn an approved spec into ordered, independently verifiable tasks.',
+    required: ['spec_dir'],
+    text: [
+      `Write an implementation plan for Loom spec: ${spec_dir}`,
+      '',
+      'Read the pipeline context and spec artifacts first. Produce ordered task files with dependencies, acceptance criteria, and verification commands.'
+    ].join('\n'),
+  }),
+  'loom-verify-work': ({ spec_dir }) => ({
+    description: 'Run final compile, test, placeholder, and spec coverage verification.',
+    required: ['spec_dir'],
+    text: [
+      `Verify the completed work for Loom spec: ${spec_dir}`,
+      '',
+      'Run the project verification commands, check generated artifacts, scan for placeholders, and write a verification report with command evidence.'
+    ].join('\n'),
+  }),
+  'loom-request-review': ({ spec_dir }) => ({
+    description: 'Prepare a review request with change summary, verification evidence, and focus areas.',
+    required: ['spec_dir'],
+    text: [
+      `Prepare a code review request for Loom spec: ${spec_dir}`,
+      '',
+      'Summarize changed files, behavior changes, verification evidence, residual risks, and reviewer focus areas.'
+    ].join('\n'),
+  }),
+};
+
 const sessionStore = new SessionStore();
 // 每个 server 进程对应一个 stdio 连接，握手时生成唯一 sessionId
 let sessionId = randomUUID();
@@ -38,8 +162,8 @@ function lazyToolsEnabled() {
   return process.env.LOOM_LAZY_TOOLS !== '0';
 }
 
-function toMcpTool({ name, description, inputSchema }) {
-  return { name, description, inputSchema };
+function toMcpTool({ name, description, inputSchema, annotations, loom }) {
+  return { name, description, inputSchema, annotations, loom };
 }
 
 export function listVisibleTools(store, id, { lazyEnabled = lazyToolsEnabled() } = {}) {
@@ -72,6 +196,23 @@ function negotiateProtocolVersion(requested) {
   return PROTOCOL_VERSION;
 }
 
+function getPrompt(name, args = {}) {
+  if (!name) throw new Error('Missing prompt name');
+  const template = PROMPT_TEMPLATES[name];
+  if (!template) throw new Error(`Unknown prompt: ${name}`);
+  const rendered = template(args);
+  for (const field of rendered.required) {
+    if (!args[field]) throw new Error(`Missing required prompt argument: ${field}`);
+  }
+  return {
+    description: rendered.description,
+    messages: [{
+      role: 'user',
+      content: { type: 'text', text: rendered.text },
+    }],
+  };
+}
+
 async function handleRequest(msg) {
   const { id, method, params } = msg;
 
@@ -81,7 +222,11 @@ async function handleRequest(msg) {
       sessionId = randomUUID(); // 新握手 → 新会话，清掉上一连接的 spec 绑定残留
       return makeResponse(id, {
         protocolVersion: negotiateProtocolVersion(params?.protocolVersion),
-        capabilities: { tools: { listChanged: lazyToolsEnabled() } },
+        capabilities: {
+          tools: { listChanged: lazyToolsEnabled() },
+          resources: { listChanged: false, subscribe: false },
+          prompts: { listChanged: false },
+        },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION }
       });
 
@@ -93,6 +238,31 @@ async function handleRequest(msg) {
       // 设置 LOOM_LAZY_TOOLS=0 可恢复全量注册（向后兼容）。
       const tools = listVisibleTools(sessionStore, sessionId);
       return makeResponse(id, { tools });
+    }
+
+    case 'resources/list':
+      return makeResponse(id, { resources: RESOURCE_DEFINITIONS });
+
+    case 'resources/templates/list':
+      return makeResponse(id, { resourceTemplates: RESOURCE_TEMPLATES });
+
+    case 'resources/read': {
+      try {
+        return makeResponse(id, readMcpResource(params?.uri, sessionStore, sessionId));
+      } catch (error) {
+        return makeError(id, -32602, error.message);
+      }
+    }
+
+    case 'prompts/list':
+      return makeResponse(id, { prompts: PROMPT_DEFINITIONS });
+
+    case 'prompts/get': {
+      try {
+        return makeResponse(id, getPrompt(params?.name, params?.arguments || {}));
+      } catch (error) {
+        return makeError(id, -32602, error.message);
+      }
     }
 
     case 'tools/call': {

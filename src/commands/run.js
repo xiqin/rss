@@ -5,6 +5,7 @@ import { PipelineSelector } from '../core/pipeline-selector.js';
 import { SpecLock } from '../core/lock.js';
 import { parseVerdict } from '../core/artifact-checker.js';
 import { resolvePipelineDir } from '../core/spec-dir.js';
+import { finalizeReports, printFinalizeResult } from './finalize.js';
 
 async function withWriteLock(lock, options, action) {
   if (options.force) lock.release();
@@ -121,8 +122,24 @@ export default async function run(options) {
   }
 
   if (options.advance) {
-    await withWriteLock(lock, options, () => {
+    await withWriteLock(lock, options, async () => {
       const result = engine.advance({ compressionConfirmed: options.compressionConfirmed === true });
+      if (result.ok && result.complete) {
+        console.log(`\n  ✓ Pipeline complete at stage: ${result.stage}${result.alreadyComplete ? ' (already complete)' : ''}\n`);
+        if (options.reports !== false) {
+          const finalizeResult = await finalizeReports({
+            cwd,
+            specDir: absSpecDir,
+            workflow: engine.workflow,
+            reports: options.reports,
+            prEvidence: options.prEvidence,
+            dashboard: options.dashboard,
+            hashArtifacts: options.hashArtifacts,
+          });
+          printFinalizeResult(finalizeResult);
+        }
+        return;
+      }
       printResult(
         result,
         r => `\n  ✓ Pipeline advanced: ${r.from} → ${r.to}\n`,

@@ -31,8 +31,13 @@ describe('update command', () => {
 
     const sp = vi.spyOn(console, 'log').mockImplementation(() => {});
     const { default: update } = await import('../../src/commands/update.js');
+    const projectRoot = process.cwd();
     await update({ tool: 'claude-code' });
-    expect(mockAdapter.install).toHaveBeenCalled();
+    expect(mockAdapter.install).toHaveBeenCalledTimes(1);
+    const [loomRoot, version, passedProjectRoot] = mockAdapter.install.mock.calls[0];
+    expect(loomRoot).toContain('rss');
+    expect(version).toBeTruthy();
+    expect(passedProjectRoot).toBe(projectRoot);
     sp.mockRestore();
   });
 

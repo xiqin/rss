@@ -3,6 +3,9 @@ name: loom-writing-skills
 description: >
   Author or modify a loom skill file. Provides SKILL.md structure, frontmatter format, and quality checklist.
   Use when: creating or updating loom skills, their frontmatter, triggers, or quality checklist.
+when_to_use: Create or update a Loom skill, including its metadata, trigger boundaries, and quality checks.
+argument-hint: <skill name or change request>
+user-invocable: true
 ---
 
 # 编写新 Skill

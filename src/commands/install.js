@@ -49,7 +49,7 @@ export default async function install(options) {
       continue;
     }
 
-    const log = adapter.install(PROJECT_ROOT, version);
+    const log = adapter.install(PROJECT_ROOT, version, process.cwd());
     console.log(log.join('\n'));
     console.log('');
   }

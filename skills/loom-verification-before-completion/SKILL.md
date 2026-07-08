@@ -3,6 +3,9 @@ name: loom-verification-before-completion
 description: >
   Final integrity check before declaring work complete: compile, test, placeholder scan, spec coverage.
   Use when: code changes appear complete and need final compile, test, and integrity verification.
+when_to_use: Run final compile, test, placeholder, and spec coverage checks before declaring work complete.
+argument-hint: <spec_dir or verification scope>
+user-invocable: true
 ---
 
 # 完成前验证

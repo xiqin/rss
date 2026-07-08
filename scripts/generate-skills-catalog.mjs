@@ -19,7 +19,7 @@ function parseFrontmatter(content) {
   const yaml = match[1];
   const data = {};
   for (const line of yaml.split('\n')) {
-    const kv = line.match(/^(\w+):\s*(.*)/);
+      const kv = line.match(/^(\w[\w-]*):\s*(.*)/);
     if (kv) {
       const val = kv[2].trim();
       if (val === '>' || val === '|') continue;

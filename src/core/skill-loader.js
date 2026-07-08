@@ -19,7 +19,7 @@ const TRIGGER_MAX_LINES = 10;
 
 /**
  * 解析 SKILL.md 的 YAML frontmatter。
- * 只提取 name / description 两个字段，不引入 yaml 库。
+ * 提取简单 key/value 字段，不引入 yaml 库。
  */
 function parseFrontmatter(text) {
   const match = text.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -42,7 +42,7 @@ function parseFrontmatter(text) {
         continue;
       }
     }
-    const kv = line.match(/^(\w+):\s*(.*)/);
+    const kv = line.match(/^(\w[\w-]*):\s*(.*)/);
     if (kv) {
       if (key) fm[key] = value.trim();
       key = kv[1];

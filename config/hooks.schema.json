@@ -2,12 +2,44 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/xiqin/loom/config/hooks.schema.json",
   "title": "loom Hook System",
-  "description": "Hook 系统定义 — 生命周期钩子、平台兼容、失败回退策略。驱动 src/hooks/run-hook.js。",
+  "description": "Hook 系统定义 — 生命周期事件、平台兼容、失败回退策略。驱动 hooks/run-hook.js。",
   "version": 1,
+  "lifecycleEvents": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "PermissionRequest",
+    "PermissionDenied",
+    "SubagentStart",
+    "SubagentStop",
+    "TaskCreated",
+    "TaskCompleted",
+    "WorktreeCreate",
+    "WorktreeRemove",
+    "PreCompact",
+    "PostCompact",
+    "FileChanged"
+  ],
   "hooks": {
-    "type": "array",
-    "description": "所有注册的 hook 定义",
-    "items": {
+    "oneOf": [
+      {
+        "type": "object",
+        "description": "推荐格式：按生命周期事件分组的 hook 注册表。键为事件名，值为 hook 定义数组。",
+        "additionalProperties": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hook" }
+        }
+      },
+      {
+        "type": "array",
+        "description": "兼容格式：旧版平铺 hook 定义数组。事件匹配依赖每个 hook 的 event 或 events 字段。",
+        "items": { "$ref": "#/definitions/hook" }
+      }
+    ]
+  },
+  "definitions": {
+    "hook": {
       "type": "object",
       "required": ["id", "entry"],
       "properties": {
@@ -15,6 +47,15 @@
           "type": "string",
           "description": "Hook 唯一标识（kebab-case）",
           "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "event": {
+          "type": "string",
+          "description": "生命周期事件名。事件分组格式中可省略，默认使用所属分组键。"
+        },
+        "events": {
+          "type": "array",
+          "description": "旧版平铺格式可用的多个生命周期事件名。",
+          "items": { "type": "string" }
         },
         "entry": {
           "type": "string",
@@ -61,6 +102,11 @@
           "minimum": 1,
           "maximum": 5,
           "default": 2
+        },
+        "policy": {
+          "type": "object",
+          "description": "Hook 自定义治理策略。由具体 handler 解释，用于风险等级、批准要求、审计范围、合规历史落盘、用户请求入口分类、工具执行结果审计、subagent/task/handoff 关联、任务生命周期产物关联、worktree 生命周期清理状态、compaction handoff、文件变更同步建议等。",
+          "additionalProperties": true
         }
       }
     }
@@ -90,16 +136,18 @@
   },
   "executionModel": {
     "description": "Hook 执行模型",
-    "runner": "src/hooks/run-hook.js",
+    "runner": "hooks/run-hook.js",
     "shellWrapper": "hooks/<hook-id>",
     "flow": [
       "1. Shell wrapper 被宿主工具调用",
-      "2. Shell wrapper 定位并调用 node run-hook.js <hook-id>",
+      "2. Shell wrapper 定位并调用 node hooks/run-hook.js <hook-id> 或 node hooks/run-hook.js --event <event>",
       "3. Runner 从 hooks.json 加载 hook 定义",
-      "4. 检查平台兼容性（不支持则 skip with warning）",
-      "5. 通过 createRequire 加载 .cjs handler 模块",
-      "6. 带超时执行 handler",
-      "7. 失败时按 fallback 策略处理"
+      "4. 按 hook id 或生命周期事件解析一个或多个 hook",
+      "5. 检查平台兼容性（不支持则 skip with warning）",
+      "6. 通过 createRequire 加载 .cjs handler 模块",
+      "7. 带超时执行 handler，并传入 { event, payload, hook }",
+      "8. handler 可返回 { status: 'ok'|'warned'|'skipped'|'blocked'|'failed', message, ... } 表达治理裁决",
+      "9. blocked/failed 裁决直接视为失败；UserPromptSubmit/PermissionRequest/PermissionDenied/SubagentStart/SubagentStop/TaskCreated/TaskCompleted/WorktreeCreate/WorktreeRemove/PreCompact/PostCompact/FileChanged/PostToolUse 等审计 handler 可写入 .loom/compliance/history.json，UserPromptSubmit handler 可记录用户请求、风险分类和流程建议，PostToolUse handler 可记录工具名、输入摘要、退出状态、产物路径、错误摘要和风险结果，Task handler 可记录任务文件、任务状态、handoff 和产物关联，Worktree handler 可记录隔离工作区路径、分支、base branch、清理状态和残留风险，compaction handler 还可写入 specs/<spec>/handoffs/compact-*.json，FileChanged handler 可记录变更路径、风险分类和同步建议；异常或超时按 fallback 策略处理"
     ]
   },
   "platformDetection": {

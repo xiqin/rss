@@ -33,7 +33,18 @@ export default async function memory(subcommand, options) {
       const entry = store.add(options.type, options.content, {
         author: options.author,
         context: options.context,
-        tags: options.tags?.split(',').map(s => s.trim())
+        tags: csv(options.tags),
+        source: options.source,
+        confidence: options.confidence,
+        scope: options.scope,
+        expiresAt: options.expiresAt,
+        stage: options.stage,
+        files: csv(options.files),
+        specDir: options.specDir,
+        pr: options.pr,
+        commit: options.commit,
+        task: options.task,
+        handoff: options.handoff,
       });
       console.log(`\n  ✓ Memory added [${entry.id}]: ${entry.type} — ${entry.content}\n`);
       break;
@@ -43,7 +54,17 @@ export default async function memory(subcommand, options) {
       const entries = store.list({
         type: options.type,
         author: options.author,
-        limit: parseInt(options.limit) || 20
+        limit: parseInt(options.limit) || 20,
+        tag: options.tag,
+        scope: options.scope,
+        stage: options.stage,
+        file: options.file,
+        specDir: options.specDir,
+        pr: options.pr,
+        commit: options.commit,
+        task: options.task,
+        handoff: options.handoff,
+        includeExpired: options.includeExpired,
       });
 
       if (options.json) {
@@ -60,7 +81,8 @@ export default async function memory(subcommand, options) {
       for (const e of entries) {
         const date = e.created_at?.slice(0, 10) || '?';
         const author = e.author !== 'unknown' ? ` [${e.author}]` : '';
-        console.log(`  ${e.id}  ${date}  ${e.type.padEnd(4)}  ${e.content}${author}`);
+        const metadata = formatMetadata(e);
+        console.log(`  ${e.id}  ${date}  ${e.type.padEnd(4)}  ${e.content}${author}${metadata}`);
       }
       console.log('');
       break;
@@ -130,4 +152,21 @@ export default async function memory(subcommand, options) {
 `);
     }
   }
+}
+
+function csv(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
+  return String(value).split(',').map(item => item.trim()).filter(Boolean);
+}
+
+function formatMetadata(entry) {
+  const parts = [];
+  if (entry.scope) parts.push(`scope:${entry.scope}`);
+  if (entry.stage) parts.push(`stage:${entry.stage}`);
+  if (entry.links?.spec) parts.push(`spec:${entry.links.spec}`);
+  if (entry.links?.task) parts.push(`task:${entry.links.task}`);
+  if (entry.files?.length) parts.push(`files:${entry.files.join(',')}`);
+  if (entry.expires_at) parts.push(`expires:${entry.expires_at.slice(0, 10)}`);
+  return parts.length ? ` (${parts.join(' ')})` : '';
 }

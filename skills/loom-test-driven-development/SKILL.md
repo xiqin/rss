@@ -3,6 +3,9 @@ name: loom-test-driven-development
 description: >
   Implement features using strict Red-Green-Refactor TDD cycle. No production code without a failing test first.
   Use when: implementing behavior where tests can define expected outcomes before production code changes.
+when_to_use: Implement behavior through a strict red-green-refactor TDD loop.
+argument-hint: <behavior or test seam>
+user-invocable: true
 ---
 
 # 测试驱动开发（TDD）

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { executeToolCall, TOOL_DEFINITIONS } from '../../src/mcp/tools.js';
+import { executeToolCall, readMcpResource, TOOL_DEFINITIONS } from '../../src/mcp/tools.js';
 import { SessionStore } from '../../src/mcp/session-store.js';
 import { listVisibleTools } from '../../src/mcp/server.js';
 
@@ -30,12 +30,49 @@ describe('MCP tool definitions', () => {
     }
   });
 
+  it('every tool carries security annotations and loom risk metadata', () => {
+    for (const t of TOOL_DEFINITIONS) {
+      expect(t.annotations).toMatchObject({
+        readOnlyHint: expect.any(Boolean),
+        destructiveHint: expect.any(Boolean),
+        idempotentHint: expect.any(Boolean),
+        openWorldHint: expect.any(Boolean),
+      });
+      expect(['low', 'medium', 'high']).toContain(t.loom.risk);
+      expect(Array.isArray(t.loom.effects)).toBe(true);
+      expect(Array.isArray(t.loom.writes)).toBe(true);
+    }
+  });
+
+  it('marks read-only tools and approval-sensitive tools explicitly', () => {
+    const getContext = TOOL_DEFINITIONS.find(t => t.name === 'loom_get_context');
+    const approveGate = TOOL_DEFINITIONS.find(t => t.name === 'loom_approve_gate');
+    const adjustPipeline = TOOL_DEFINITIONS.find(t => t.name === 'loom_adjust_pipeline');
+
+    expect(getContext.annotations.readOnlyHint).toBe(true);
+    expect(getContext.loom.writes).toEqual([]);
+    expect(approveGate.loom.requiresUserConfirmation).toBe(true);
+    expect(adjustPipeline.loom.risk).toBe('high');
+  });
+
   it('memory tools expose project_root in their schemas', () => {
     const getMemory = TOOL_DEFINITIONS.find(t => t.name === 'loom_get_memory');
     const addMemory = TOOL_DEFINITIONS.find(t => t.name === 'loom_add_memory');
 
     expect(getMemory.inputSchema.properties.project_root).toBeDefined();
     expect(addMemory.inputSchema.properties.project_root).toBeDefined();
+  });
+
+  it('memory tools expose structured knowledge metadata fields', () => {
+    const getMemory = TOOL_DEFINITIONS.find(t => t.name === 'loom_get_memory');
+    const addMemory = TOOL_DEFINITIONS.find(t => t.name === 'loom_add_memory');
+
+    for (const field of ['tag', 'scope', 'stage', 'file', 'spec_dir', 'task', 'include_expired']) {
+      expect(getMemory.inputSchema.properties[field]).toBeDefined();
+    }
+    for (const field of ['source', 'confidence', 'scope', 'expires_at', 'spec_dir', 'pr', 'commit', 'task', 'handoff', 'stage', 'files']) {
+      expect(addMemory.inputSchema.properties[field]).toBeDefined();
+    }
   });
 
   it('write_handoff schema restricts status values', () => {
@@ -67,8 +104,11 @@ describe('lazy MCP tool listing', () => {
 
   it('exposes every tool when lazy loading is disabled', () => {
     const store = new SessionStore();
-    const names = listVisibleTools(store, 's-full', { lazyEnabled: false }).map(t => t.name);
+    const tools = listVisibleTools(store, 's-full', { lazyEnabled: false });
+    const names = tools.map(t => t.name);
     expect(names).toEqual(TOOL_DEFINITIONS.map(t => t.name));
+    expect(tools.find(t => t.name === 'loom_get_context').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'loom_adjust_pipeline').loom.risk).toBe('high');
   });
 });
 
@@ -183,6 +223,82 @@ describe('loom_get_context (① progressive disclosure)', () => {
     } finally {
       delete process.env.LOOM_CONTEXT_FULL;
     }
+  });
+});
+
+describe('MCP resources/read', () => {
+  it('reads context and memory resources as MCP contents', () => {
+    const root = tmp();
+    const rulesDir = join(root, '.loom', 'rules');
+    const memoryDir = join(root, '.loom', 'memory');
+    mkdirSync(rulesDir, { recursive: true });
+    mkdirSync(memoryDir, { recursive: true });
+    writeFileSync(join(rulesDir, 'constitution.md'), '# 宪章\n\n## 原则\n保持简单。\n');
+    writeFileSync(join(memoryDir, 'MEMORY.md'), '# 记忆\n\n## 决策\n使用 JSON 文件持久化。\n');
+
+    const store = new SessionStore();
+    const constitution = readMcpResource('loom://context/constitution', store, 's1', { projectRoot: root });
+    const memory = readMcpResource('loom://memory', store, 's1', { projectRoot: root });
+
+    expect(constitution.contents).toHaveLength(1);
+    expect(constitution.contents[0]).toMatchObject({
+      uri: 'loom://context/constitution',
+      mimeType: 'text/markdown',
+    });
+    expect(constitution.contents[0].text).toContain('保持简单');
+    expect(memory.contents[0].text).toContain('使用 JSON 文件持久化');
+  });
+
+  it('reads the skill catalog as JSON', () => {
+    const store = new SessionStore();
+    const result = readMcpResource('loom://skills/catalog', store, 's1');
+    const parsed = JSON.parse(result.contents[0].text);
+
+    expect(result.contents[0]).toMatchObject({
+      uri: 'loom://skills/catalog',
+      mimeType: 'application/json',
+    });
+    expect(parsed.skills.map(s => s.name)).toContain('loom-using-loom');
+  });
+
+  it('rejects missing or unknown resource uri', () => {
+    const store = new SessionStore();
+    expect(() => readMcpResource('', store, 's1')).toThrow(/Missing resource uri/);
+    expect(() => readMcpResource('loom://unknown', store, 's1')).toThrow(/Unknown resource uri/);
+  });
+
+  it('reads encoded spec state, progress, and handoff resources', () => {
+    const root = tmp();
+    const specDir = join(root, 'specs', '2026-07-07+demo');
+    const handoffsDir = join(specDir, 'handoffs');
+    mkdirSync(handoffsDir, { recursive: true });
+    writeFileSync(join(specDir, 'pipeline.state.json'), '{"current_stage":"planning"}\n');
+    writeFileSync(join(specDir, 'progress.md'), '# Progress\n\n- planning\n');
+    writeFileSync(join(handoffsDir, 'planning.json'), '{"status":"done"}\n');
+
+    const store = new SessionStore();
+    const encodedSpec = encodeURIComponent('specs/2026-07-07+demo');
+    const state = readMcpResource(`loom://spec/${encodedSpec}/state`, store, 's1', { projectRoot: root });
+    const progress = readMcpResource(`loom://spec/${encodedSpec}/progress`, store, 's1', { projectRoot: root });
+    const handoff = readMcpResource(`loom://spec/${encodedSpec}/handoffs/planning`, store, 's1', { projectRoot: root });
+
+    expect(state.contents[0]).toMatchObject({ mimeType: 'application/json' });
+    expect(state.contents[0].text).toContain('planning');
+    expect(progress.contents[0]).toMatchObject({ mimeType: 'text/markdown' });
+    expect(progress.contents[0].text).toContain('# Progress');
+    expect(handoff.contents[0].text).toContain('done');
+  });
+
+  it('rejects unsafe spec and handoff resource paths', () => {
+    const root = tmp();
+    const store = new SessionStore();
+    const escapedSpec = encodeURIComponent('../outside');
+    const validSpec = encodeURIComponent('specs/demo');
+
+    expect(() => readMcpResource(`loom://spec/${escapedSpec}/state`, store, 's1', { projectRoot: root }))
+      .toThrow(/escapes project root/);
+    expect(() => readMcpResource(`loom://spec/${validSpec}/handoffs/..%2Fevil`, store, 's1', { projectRoot: root }))
+      .toThrow(/Invalid resource id/);
   });
 });
 

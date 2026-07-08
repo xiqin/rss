@@ -4,6 +4,9 @@ description: >
   Overview of the loom engineering framework: pipeline stages, skills catalog, and review dimensions.
   Load when the user asks about loom capabilities or how to use it.
   Use when: the user asks how loom works, what skills exist, or how to run the engineering pipeline.
+when_to_use: Explain Loom concepts, pipeline stages, skill catalog, or framework usage.
+argument-hint: <question about Loom>
+user-invocable: true
 ---
 
 # Using loom — AI 工程化框架

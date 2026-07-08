@@ -3,6 +3,9 @@ name: loom-router
 description: >
   Route a user request to the appropriate loom capability without replacing pipeline selection.
   Use when: a user request needs intent classification before choosing a skill, pipeline selector, QA, review, debugging, or branch finishing path.
+when_to_use: Classify an ambiguous user request and route it to the right Loom skill or pipeline entry.
+argument-hint: <user request>
+user-invocable: true
 ---
 
 # loom 入口路由

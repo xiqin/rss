@@ -4,6 +4,9 @@ description: >
   QA 验收流水线编排器：从需求变更分析到功能测试、回归测试、集成测试，
   维护持久化测试用例库，输出 qa-report.md。
   Use when: 测试人员对新功能或 release 进行验收测试，需要完整的功能测试覆盖。
+when_to_use: Run QA acceptance for a feature or release, including functional, regression, and integration coverage.
+argument-hint: <feature, release, or target spec>
+user-invocable: true
 ---
 
 # QA 验收流水线

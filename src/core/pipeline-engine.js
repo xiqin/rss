@@ -311,7 +311,9 @@ export class PipelineEngine {
     // 当前阶段产物完整后再判断是否有下一步，确保终止阶段也受 outputs/verdict 门禁约束。
     const next = this.nextStep(current);
     if (!next) {
-      return { ok: false, error: `No next step after "${current}". Pipeline may be complete.`, hint: '流水线可能已完成，检查当前阶段状态' };
+      const completed = this.store.completeCurrentStage({ history: { terminal: true } });
+      if (!completed?.alreadyCompleted && current === 'verification') this._recordCompliance(current);
+      return { ok: true, complete: true, stage: current, alreadyComplete: completed?.alreadyCompleted === true };
     }
 
     if (this._requiresStageCompression(currentStep, current) && !compressionConfirmed) {

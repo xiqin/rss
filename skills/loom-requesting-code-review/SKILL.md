@@ -3,6 +3,9 @@ name: loom-requesting-code-review
 description: >
   Prepare a code review request with change summary, self-test results, and focus areas for reviewers.
   Use when: verified changes are ready for reviewer handoff or a PR needs a review request summary.
+when_to_use: Prepare a review request after verification, including change summary, tests, and reviewer focus areas.
+argument-hint: <spec_dir or PR context>
+user-invocable: true
 ---
 
 # 请求代码审查

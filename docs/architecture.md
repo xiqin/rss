@@ -19,6 +19,9 @@ loom/
 │   │   ├── run.js          # loom run（流水线执行引擎）
 │   │   ├── select.js      # loom select（AI 自主流程选择）
 │   │   ├── status.js       # loom status（流水线状态）
+│   │   ├── evidence.js     # loom evidence（统一证据视图）
+│   │   ├── dashboard.js    # loom dashboard（团队 HTML 看板）
+│   │   ├── plugins.js      # loom plugins list / plan / marketplace-template / marketplace-sync（生态扩展）
 │   │   ├── tasks.js        # loom tasks（任务并行批次分析）
 │   │   ├── index.js        # loom index（codegraph 委派；无 codegraph 时跳过）
 │   │   ├── start.js        # loom start（输出可粘贴的项目状态）
@@ -41,6 +44,7 @@ loom/
 │   │   ├── skill-loader.js       — Skill 渐进式披露
 │   │   ├── context-index.js      — 上下文文件分节
 │   │   ├── compliance-tracker.js — Skill 质量度量
+│   │   ├── evidence-store.js     — compliance history 规范化证据视图、趋势指标
 │   │   ├── lock.js               — 文件锁
 │   │   ├── installer.js          — 安装器
 │   │   ├── failure-diagnostics.js — 失败诊断
@@ -100,7 +104,8 @@ bin/loom.js → src/cli.js → src/commands/*.js
 | 项目初始化 | `init-project`                                     |
 | 安装管理   | `install` / `update` / `uninstall`                 |
 | 诊断       | `doctor` / `list`                                  |
-| 执行引擎   | `run` / `select` / `status` / `tasks` / `index` / `start` |
+| 执行引擎   | `run` / `select` / `status` / `evidence` / `dashboard` / `tasks` / `index` / `start` |
+| 生态扩展   | `plugins list` / `plugins plan` / `plugins marketplace-template` / `plugins marketplace-sync` |
 | 结构化记忆 | `memory add\|list\|export\|merge\|remove\|archive` |
 | MCP        | `mcp-serve`                                        |
 
@@ -113,6 +118,7 @@ src/core/installer.js → src/adapters/<tool>.js → src/adapters/base.js
 - `BaseAdapter`：基类，提供 `_copySkills`、`_copyCommands`、`_copyDir` 等公共方法
 - 每个工具一个适配器，实现 `toolName`、`getUserDir()`、`getSkillsDir()`、`getCommandsDir()`
 - `installer.js`：通过 `ADAPTER_MAP` 注册适配器，提供 `getUserAdapter(tool)`、`USER_TOOL_IDS`
+- `config/tools.schema.json`：通过 `contract` 描述 adapter 能力、安装范围、配置面、loom-managed 产物和版本探测方式，并生成 `ADAPTER_CONTRACTS`；`loom doctor` 会基于该契约输出配置面、managed artifacts、版本探测和 capability 一致性诊断，`loom doctor --json` 会把同一诊断结构输出为 `loom.doctor.v1` 供 CI、Web UI 和交互式 doctor 复用，`loom doctor --fix-plan` 会基于该报告写出非破坏性的 `loom.doctor-fix-plan.v1` 修复计划
 
 ### 核心层
 
@@ -127,10 +133,23 @@ src/core/memory-store.js       — 结构化记忆 JSON 存储
 src/core/skill-loader.js       — SKILL.md 渐进式披露（L0/L1/L2）
 src/core/context-index.js      — 上下文文件按 ## 切节（L0/L1）
 src/core/compliance-tracker.js — Skill 质量度量（遵守率追踪）
+src/core/evidence-store.js     — compliance history → loom.evidence.v1 规范化视图、artifact sha256、导出文件、报告渲染和趋势指标
 src/core/failure-diagnostics.js — 失败诊断与恢复建议
 src/core/task-lock.js          — 任务级并发锁
 src/core/fs-interface.js       — 文件系统抽象层（NodeFileSystem + InMemoryFileSystem）
 ```
+
+`loom dashboard` 复用 `EvidenceStore` 与 `MemoryStore`，把 `.loom/compliance/history.json` 和 `.loom/memory/store.json` 汇总为 `.loom/reports/team-dashboard.html`。它不启动 Web 服务，适合作为 PR、发布或团队例会前的静态 HTML 协作入口；`--spec-dir` 可把看板限制到单个需求范围。`--repos` 可传入逗号分隔的多个仓库根目录，命令会分别读取每个仓库的 `.loom/compliance/history.json` 和 `.loom/memory/store.json`，再聚合为同一份跨仓库看板。`--web` 会额外写出 `loom.dashboard.v1` JSON 数据文件，并在 HTML 中声明数据文件和刷新间隔，供静态托管页面轮询最新 dashboard 数据。
+
+`loom plugins list` 读取 `.loom/plugins/*.json`，以只读方式发现第三方插件 manifest，并标准化输出 `steps`、`adapters`、`hooks` 和 `reporters` 扩展点。该命令不会动态加载第三方代码，当前定位是插件 API 的发现和校验边界；无效 manifest 会单独列入结果，避免破坏有效插件列表。
+
+`loom plugins plan` 会把已发现的 manifest 汇总为 `.loom/plugins/plugin-plan.json`，使用 `loom.plugin-plan.v1` 描述有效插件、扩展点和无效 manifest。计划明确 `dynamicLoading:false` 与 `manual-review`，因此只是执行引擎接入前的审计工件，不会加载或执行第三方插件代码。
+
+`loom plugins marketplace-template` 生成 `.loom/marketplace/mcp-marketplace.json` remote MCP marketplace 草稿，声明 server endpoint、能力范围、认证环境变量、信任边界和各客户端配置落点。该命令只写本地模板，不联网、不发布、不加载远程代码，默认不覆盖已有文件。
+
+`loom plugins marketplace-sync` 读取 marketplace 草稿并写出 `.loom/marketplace/mcp-marketplace.sync.json` 的 `loom.mcp-marketplace-sync.v1` 本地同步计划，同时追加 `.loom/compliance/marketplace-sync.jsonl` 审计记录。它不联网、不发布、不修改客户端配置，只校验远程 URL 的 HTTPS 要求和 `trust.codeExecution:false` 安全边界，失败时生成 high risk 审计并让 CLI 返回失败退出码。
+
+`loom doctor --fix-plan` 复用 `loom.doctor.v1` 诊断数据，写出 `.loom/doctor/fix-plan.json` 的 `loom.doctor-fix-plan.v1` 修复计划。计划会列出安装缺失工具、补齐 `.loom` project health、刷新 stale subagent context、检查 adapter contract 漂移和可选 codegraph 配置等建议动作，并明确 `autoApply:false`、`mutatesFiles:false`、`requiresReview:true`。该命令只写计划文件，不自动执行修复动作。
 
 **安装流程** (`loom install --tool <target>`)：
 
@@ -179,12 +198,25 @@ CLI (loom uninstall --tool <target>)
 hooks/session-start (shell wrapper)
   → hooks/run-hook.js session-start
     → loadHooks() → hooks.json
-    → findHook() → hook definition
+    → findHook() → flattenHooks() → hook definition
     → supportsPlatform() → platform check
     → _require(handlerPath) → .cjs handler
     → withTimeout(handler, timeoutMs) → execute
     → fallback handling (skip/warn/error/retry)
 ```
+
+`hooks/hooks.json` 当前采用按生命周期事件分组的注册表，例如 `SessionStart: [ ... ]`。`hooks/run-hook.js` 同时支持旧版平铺数组和新版事件对象：
+
+- `runHook(hookId)` / `node hooks/run-hook.js <hook-id>`：按 hook id 执行单个 handler，兼容现有 shell wrapper。
+- `runHookEvent(eventName)` / `node hooks/run-hook.js --event <event-name>`：执行某个生命周期事件下注册的所有 handler，并汇总状态。
+
+handler 会收到 `{ event, payload, hook }`，无参数的旧 handler 仍可继续运行。
+
+handler 可以返回治理裁决对象，例如 `{ status: 'ok' }`、`{ status: 'warned', message }` 或 `{ status: 'blocked', message }`。`blocked` / `failed` 裁决会被 runner 视为失败，配合 `blocking: true` 和 `fallback: "error"` 可用于阻断高风险操作。当前内置 `user-prompt-audit` handler 注册在 `UserPromptSubmit`，会记录用户请求、风险分类和 pipeline/debug/QA/approval 流程建议；`pre-tool-use-audit` handler 注册在 `PreToolUse`，会审计 shell 命令并阻断未确认的高风险删除、重置和磁盘操作；`post-tool-use-audit` handler 注册在 `PostToolUse`，会记录工具名、输入摘要、退出状态、产物路径、错误摘要和风险结果；`permission-audit` handler 注册在 `PermissionRequest` / `PermissionDenied`，会把权限请求与拒绝记录追加到 `.loom/compliance/history.json`；`subagent-audit` handler 注册在 `SubagentStart` / `SubagentStop`，会记录 subagent 会话、任务 ID、task-state 路径和 handoff 路径；`task-audit` handler 注册在 `TaskCreated` / `TaskCompleted`，会记录任务元数据、任务文件、task-state、handoff、产物和失败原因；`worktree-audit` handler 注册在 `WorktreeCreate` / `WorktreeRemove`，会记录隔离工作区路径、分支、base branch、commit、清理状态和残留风险；`compaction-audit` handler 注册在 `PreCompact` / `PostCompact`，会记录压缩前后上下文摘要，并在 payload 提供 `specDir` 时写入 `handoffs/compact-pre.json` 或 `handoffs/compact-post.json`；`file-changed-audit` handler 注册在 `FileChanged`，会记录变更路径、风险分类和 context/codegraph/generate/secret-scan 同步建议。
+
+### 企业治理 Policy
+
+`loom policy check` 读取 `.loom/policy.json`，用 `sensitivePaths` 和 `secretPatterns` 扫描 `--files` / `--file` 指定的变更文件，并把检查结果追加到 `.loom/compliance/policy-audit.jsonl`。该命令是 `audit:high` 的一部分，供本地发布前检查和 GitHub Actions 复用；后续 policy 可继续扩展到工具白名单、命令权限、网络访问和 managed settings。
 
 ### Fallback 策略
 
@@ -222,7 +254,12 @@ npm run sync-version      # 同步版本号
 tests/
 ├── commands/       # CLI 命令测试
 ├── adapters/       # 适配器测试
-└── hooks/          # Hook 系统测试
+├── hooks/          # Hook 系统测试
+├── unit/           # 核心模块单元测试
+├── integration/    # 集成测试
+├── e2e/            # 端到端流水线测试
+├── scripts/        # 生成脚本测试
+└── skills/         # Skill 与脚本测试
 ```
 
 测试框架：vitest。运行：
@@ -302,7 +339,7 @@ src/core/memory-store.js  — JSON 文件存储（.loom/memory/store.json）
 src/commands/memory.js    — loom memory add/list/export/merge/remove/archive
 ```
 
-MEMORY.md 变为只读导出视图，由 `loom memory export` 生成。
+Memory 条目除 `type`、`content`、`author`、`tags` 和 `context` 外，还可记录 `source`、`confidence`、`scope`、`expires_at`、`stage`、`files` 和 `links`。`links` 用于关联 spec、PR、commit、task 和 handoff，`loom memory list` 与 MCP `loom_get_memory` 可按这些字段检索；过期条目默认隐藏，必要时用 `--include-expired` 显示。`MEMORY.md` 变为只读导出视图，由 `loom memory export` 生成。
 
 ### MCP Server
 
