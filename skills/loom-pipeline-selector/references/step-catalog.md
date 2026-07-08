@@ -42,7 +42,7 @@
 - skill: `loom-index-update`
 - requires: `verify-report.md`
 - outputs: 无
-- 跳过条件: 未启用 codegraph + 无记忆更新
+- 跳过条件: 图后端未启用 + 无记忆更新
 
 ## 依赖闭包
 

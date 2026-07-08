@@ -6,6 +6,13 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 
+// 内置图后端 marker 映射；未来扩展后端时在此补充
+const GRAPH_BACKEND_MARKERS = {
+  codegraph: '.codegraph',
+  scip: '.lsif',
+  sourcegraph: '.sourcegraph',
+};
+
 export function validateIndex(options = {}) {
   const root = options.root || process.cwd();
   const errors = [];
@@ -13,10 +20,24 @@ export function validateIndex(options = {}) {
 
   const storePath = join(root, '.loom', 'memory', 'store.json');
   const memoryPath = join(root, '.loom', 'memory', 'MEMORY.md');
-  const codegraphPath = join(root, '.codegraph');
 
-  if (!existsSync(codegraphPath)) {
-    warnings.push('codegraph not configured; codegraph sync is skipped');
+  // 读取图后端配置；不存在时默认 codegraph（向后兼容）
+  const graphConfig = readGraphConfig(root);
+  const backend = graphConfig.backend || 'codegraph';
+  const enabled = graphConfig.enabled !== false;
+
+  if (enabled && backend !== 'none') {
+    const marker = GRAPH_BACKEND_MARKERS[backend];
+    if (marker) {
+      const markerPath = join(root, marker);
+      if (!existsSync(markerPath)) {
+        warnings.push(`graph backend "${backend}" is enabled but marker "${marker}" not found; graph sync will be skipped`);
+      }
+    } else {
+      warnings.push(`graph backend "${backend}" has no known marker; graph sync availability cannot be verified`);
+    }
+  } else if (backend === 'none') {
+    warnings.push('graph backend is "none"; graph sync is skipped');
   }
 
   if (!existsSync(storePath)) {
@@ -33,7 +54,20 @@ export function validateIndex(options = {}) {
     warnings.push('MEMORY.md export view missing; run: loom memory export when needed');
   }
 
-  return { ok: errors.length === 0, errors, warnings, root };
+  return { ok: errors.length === 0, errors, warnings, root, graphBackend: backend };
+}
+
+function readGraphConfig(root) {
+  const configPath = join(root, '.loom', 'graph.config.json');
+  if (!existsSync(configPath)) {
+    // 默认行为：若存在 .codegraph/ 则视为 codegraph 后端，否则仍报 codegraph（向后兼容）
+    return { backend: 'codegraph', enabled: true };
+  }
+  try {
+    return JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch {
+    return { backend: 'codegraph', enabled: true };
+  }
 }
 
 function parseArgs(argv) {
@@ -47,7 +81,7 @@ function parseArgs(argv) {
 function printReport(result) {
   for (const warning of result.warnings) console.warn(`WARN ${warning}`);
   for (const error of result.errors) console.error(`ERROR ${error}`);
-  console.log(`Checked index in ${relative(process.cwd(), result.root) || '.'}`);
+  console.log(`Checked index in ${relative(process.cwd(), result.root) || '.'} (graph backend: ${result.graphBackend})`);
 }
 
 if (process.argv[1] === __filename) {

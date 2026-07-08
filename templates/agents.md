@@ -11,7 +11,7 @@
 1. 若当前只看到 meta 工具，先调用 `loom_list_capabilities`，再用 `loom_load_tool_group(group="pipeline"|"context")` 加载所需工具。
 2. `loom_get_project_status` — 获取活跃流水线、阶段、任务概要
 3. `loom_get_context(doc="constitution")` / `"memory"` — 先取 outline（L0），只在需要某 section 时才取 L1 全文
-4. codegraph：仅在可用时使用 `codegraph_search` / `codegraph_context` / `codegraph_impact`；不可用时跳过图查询并用源码搜索补充判断
+4. {{GRAPH_BACKEND_DESC}}
 5. 阶段切换或无上下文续跑时，优先读取 `progress.md` 中的 Handoffs 摘要；只有摘要不足以继续时，才按需读取 `handoffs/<stage>.json`
 
 ### 第二步：按需深入（仅在任务涉及时）
@@ -156,5 +156,5 @@
 交付前确认：
 
 1. 相关验证命令已经运行，或明确说明无法运行的原因。
-2. 新增/删除的路由、模块、命令、关键约定已同步 codegraph（`loom index`：codegraph 可用时委派 `codegraph sync`；不可用时注明已跳过）。
+2. {{GRAPH_SYNC_DESC}}。
 3. 重要踩坑、用户偏好或跨会话决策已通过 `loom_add_memory` 或 `loom memory add` 记录。

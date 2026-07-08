@@ -48,7 +48,24 @@ user-invocable: true
 node <skill-dir>/scripts/init-project.mjs --cwd <project-root> --roles pm,dev --tools claude-code,codex
 ```
 
-### 第三步：填充产品上下文（仅当选了 `pm`）
+### 第三步：确认图后端（仅当选了 `dev`）
+
+如果用户没有明确指定图后端，询问这个项目使用哪个代码图谱/知识库后端。可选项为：
+
+- `codegraph`（默认推荐）：基于 tree-sitter AST 的本地代码图谱，通过 MCP 实时查询。需要 `.codegraph/` 目录，脚本会在初始化时自动 `codegraph init` 建图。
+- `sourcegraph`：基于 Sourcegraph 的代码搜索和引用查询。需要 Sourcegraph 实例或 MCP server，索引由用户自行搭建。
+- `scip`：基于 SCIP/LSIF 精确索引。需要已生成的 `.lsif` 或 `.scip` 文件，索引由用户自行生成。
+- `none`：不启用任何图后端，所有代码查询走源码搜索和 git diff。
+
+未指定时默认 `codegraph`（与历史行为一致）。把选择通过 `--graph-backend` 传给脚本：
+
+```bash
+node <skill-dir>/scripts/init-project.mjs --cwd <project-root> --roles dev --tools codex --graph-backend codegraph
+```
+
+如果用户在调用 skill 时已经明确指定了图后端（例如"用 sourcegraph 初始化项目"），则跳过此询问。非交互环境（CI、脚本调用）未指定时默认 `codegraph`，不阻塞流程。
+
+### 第四步：填充产品上下文（仅当选了 `pm`）
 
 脚本对 `pm` 角色只写出 `.loom/rules/product.md` 模板（保留 `{{...}}` 占位符）。脚本运行后，**问用户以下 5 题**，再用 Edit 把答案填进 `product.md`，替换对应占位符：
 
@@ -71,6 +88,7 @@ loom init-project
 - `--force`：覆盖已有 loom 生成文件。
 - `--roles pm,dev`：显式指定角色，决定生成哪些 `.loom/` 文件；不传时默认 `dev`（与历史行为一致）。`pm` 多写 `product.md`，`dev` 写工程上下文，两者取并集。
 - `--tools claude-code,codex,cursor,copilot,opencode`：显式指定要分发的工具；兼容历史别名 `claude`，不传时 CLI 在交互终端会询问用户，非交互环境会自动检测并默认生成 `AGENTS.md`。
+- `--graph-backend codegraph|sourcegraph|scip|none`：显式指定图后端；不传时默认 `codegraph`（与历史行为一致）。`codegraph` 会自动 `codegraph init` 建图，其它后端不自动建图。也可通过环境变量 `LOOM_GRAPH_BACKEND` 覆盖；优先级：`--graph-backend` 参数 > `LOOM_GRAPH_BACKEND` 环境变量 > 默认 codegraph。
 - `--template-dir <path>`：使用指定模板目录，主要用于测试或本地调试；CLI 入口不暴露该参数。
 
 执行后检查输出报告中的 `written` 和 `skipped`。被跳过的文件通常是用户已有的非 loom 管理文件，不要擅自覆盖，除非用户明确同意或使用 `--force`。
@@ -79,6 +97,7 @@ loom init-project
 
 ```text
 .loom/
+  graph.config.json                       # dev 角色，图后端配置
   memory/store.json                       # 所有角色，结构化记忆源
   memory/MEMORY.md                        # 所有角色，只读导出视图
   workflow.yaml                           # 所有角色（单文件，含全部 pipeline）
@@ -98,10 +117,10 @@ CLAUDE.md               # 选择 Claude Code 时
 脚本完成后必须快速审阅（按所选角色）：
 
 1. 【dev】`.loom/rules/constitution.md` 中技术栈、构建命令、测试命令、目录树和架构模式是否准确。
-2. 【dev】codegraph：可用时 `loom init-project` 已自动 `codegraph init` 建图（`.codegraph/`）；codegraph 不可用时确认图查询能力已跳过。
-4. 【pm】`.loom/rules/product.md` 中 5 项产品上下文已填，无残留 `{{...}}` 占位符。
-5. `.loom/memory/MEMORY.md` 是否有需要保留的用户偏好、踩坑和长期决策。
-6. 入口文件是否轻量：它们应该指向 `.loom/`，不要复制大段规则。
+2. 【dev】图后端：确认 `.loom/graph.config.json` 中 backend 与用户选择一致；codegraph 后端可用时已自动建图，其它后端需用户自行初始化索引；后端不可用时确认图查询能力已跳过。
+3. 【pm】`.loom/rules/product.md` 中 5 项产品上下文已填，无残留 `{{...}}` 占位符。
+4. `.loom/memory/MEMORY.md` 是否有需要保留的用户偏好、踩坑和长期决策。
+5. 入口文件是否轻量：它们应该指向 `.loom/`，不要复制大段规则。
 
 ## 约束
 

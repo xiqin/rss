@@ -45,12 +45,31 @@ jobs:
             exit 1
           fi
 
-      - name: Check codegraph status
+      - name: Check graph backend status
         run: |
-          if [ -d .codegraph ]; then
-            loom index --check
+          if [ -f .loom/graph.config.json ]; then
+            BACKEND=$(node -e "console.log(require('./.loom/graph.config.json').backend || 'codegraph')")
+            ENABLED=$(node -e "console.log(require('./.loom/graph.config.json').enabled !== false)")
           else
-            echo "codegraph not configured, skipping index check"
+            BACKEND="codegraph"
+            ENABLED="true"
+          fi
+          if [ "$ENABLED" = "true" ] && [ "$BACKEND" != "none" ]; then
+            case "$BACKEND" in
+              codegraph)
+                if [ -d .codegraph ]; then
+                  loom index --check
+                else
+                  echo "codegraph enabled but .codegraph/ not found, skipping index check"
+                fi
+                ;;
+              *)
+                echo "graph backend '$BACKEND' configured, running loom index --check"
+                loom index --check
+                ;;
+            esac
+          else
+            echo "graph backend disabled ($BACKEND), skipping index check"
           fi
 
       - name: Check task file ownership conflicts

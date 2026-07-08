@@ -93,7 +93,7 @@ pipelines:
         skill: loom-index-update
         requires: [verify-report.md]
         outputs: []
-        description: "codegraph 同步与结构化记忆更新，流水线结束"
+        description: "图后端同步与结构化记忆更新，流水线结束"
 
   # Bug 修复 — 跳过头脑风暴和隔离分支
   bugfix:
@@ -132,7 +132,7 @@ pipelines:
         skill: loom-index-update
         requires: [verify-report.md]
         outputs: []
-        description: "codegraph 同步与结构化记忆更新，流水线结束"
+        description: "图后端同步与结构化记忆更新，流水线结束"
 
   # 紧急热修复 — 最小步骤，直接执行
   hotfix:
@@ -205,7 +205,7 @@ pipelines:
         skill: loom-index-update
         requires: [verify-report.md]
         outputs: []
-        description: "同步 codegraph（重构后模块结构可能变化）"
+        description: "同步图后端（重构后模块结构可能变化）"
 
   # PM 需求到 HTML 原型 — 跳过所有工程步骤，直出可交互原型
   pm-prototype:
@@ -352,8 +352,8 @@ step_catalog:
     skill: loom-index-update
     requires: [verify-report.md]
     outputs: []
-    description: "codegraph 同步与结构化记忆更新"
-    skip_when: "未启用 codegraph + 无记忆更新"
+    description: "图后端同步与结构化记忆更新"
+    skip_when: "图后端未启用 + 无记忆更新"
 
 # ─────────────────────────────────────────
 # 选择规则 — AI 决策约束 + 规则短路

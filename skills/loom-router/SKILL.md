@@ -53,7 +53,7 @@ user-invocable: true
 | 收到审查反馈 | `loom-receiving-code-review` | 分类处理、修复或 push back。 |
 | 新功能验收或 release 验收 | `loom-qa` | 生成/执行 QA 用例并输出报告。 |
 | 开发分支已验证完成 | `loom-finishing-a-development-branch` | 选择 merge、PR、keep 或 discard。 |
-| 代码已变更且验证通过 | `loom-index-update` | 同步 codegraph、memory 和必要入口文档。 |
+| 代码已变更且验证通过 | `loom-index-update` | 同步图后端、memory 和必要入口文档。 |
 | 多个独立任务可并行 | `loom-dispatching-parallel-agents` | 仅在无共享文件冲突且已有确认 plan 时使用。 |
 | 需要编写或修改 skill | `loom-writing-skills` | 检查职责边界、触发条件、完成标准和 context load。 |
 | 用户询问 loom 能力 | `loom-using-loom` | 解释框架、skills 和 pipeline。 |

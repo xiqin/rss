@@ -31,7 +31,7 @@ user-invocable: true
 
 1. 所有 task 已完成
 2. 所有测试通过
-3. codegraph 状态已确认（不可用时已注明跳过）
+3. 图后端状态已确认（不可用时已注明跳过）
 4. 无 BLOCKER
 5. 测试报告已生成（来自 test-reporter）
 

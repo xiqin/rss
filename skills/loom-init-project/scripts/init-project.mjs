@@ -10,6 +10,7 @@ import {
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -66,15 +67,19 @@ export function initProject(options = {}) {
   const force = Boolean(options.force);
   const templateDir = resolveTemplateDir(options.templateDir);
   const roles = detectRoles(options.roles);
+  const graphBackend = detectGraphBackend(options.graphBackend);
   const facts = analyzeProject(cwd);
   const variables = buildVariables(facts);
   // 入口文件「必读上下文」按角色裁剪，避免指向未生成的文件
-  variables.REQUIRED_CONTEXT = buildRequiredContext(roles);
+  variables.REQUIRED_CONTEXT = buildRequiredContext(roles, graphBackend);
+  variables.GRAPH_BACKEND_DESC = renderGraphBackendDesc(graphBackend);
+  variables.GRAPH_SYNC_DESC = renderGraphSyncDesc(graphBackend);
   const result = {
     root: cwd,
     projectName: facts.projectName,
     techStack: variables.TECH_STACK_SUMMARY,
     roles: [...roles].sort(),
+    graphBackend,
     written: [],
     skipped: [],
     detectedTools: [],
@@ -85,7 +90,7 @@ export function initProject(options = {}) {
   writeFile(join(cwd, '.loom', 'memory', 'store.json'), renderMemoryStore(variables), result, force);
   writeRendered(templateDir, 'workflow.yaml', join(cwd, '.loom', 'workflow.yaml'), variables, result, force);
 
-  // dev 角色：工程上下文（宪章 / subagent 上下文）；图索引仅使用 codegraph。
+  // dev 角色：工程上下文（宪章 / subagent 上下文）+ 图后端配置
   if (roles.has('dev')) {
     const constitutionPath = join(cwd, '.loom', 'rules', 'constitution.md');
     writeRendered(templateDir, 'constitution.md', constitutionPath, variables, result, force);
@@ -96,6 +101,11 @@ export function initProject(options = {}) {
       result,
       force
     );
+    // 写入图后端配置；codegraph 后端额外尝试自动建图（向后兼容）
+    writeGraphConfig(cwd, graphBackend, result, force);
+    if (graphBackend === 'codegraph') {
+      ensureCodegraphIndex(cwd, result);
+    }
   }
 
   // pm 角色：产品上下文模板（变量由 SKILL.md 问卷后填充，此处保留占位符待补）
@@ -409,17 +419,115 @@ function detectRoles(explicitRoles) {
 }
 
 // 按角色生成入口文件「必读上下文」清单，只列出实际会生成的文件
-function buildRequiredContext(roles) {
+function buildRequiredContext(roles, graphBackend = 'codegraph') {
   const items = [];
   if (roles.has('pm')) {
     items.push('`.loom/rules/product.md`：产品定位、目标用户、原型约束（PM 视角）。');
   }
   if (roles.has('dev')) {
     items.push('`.loom/rules/constitution.md`：项目原则、技术栈、目录分层、架构模式、验证命令和红线。');
-    items.push('codegraph：仅使用 MCP 工具查询（`codegraph_search` / `codegraph_context` / `codegraph_impact`）；未启用 codegraph 时跳过图索引同步。');
+    items.push(renderGraphBackendContextItem(graphBackend));
   }
   items.push('`.loom/memory/store.json`：结构化记忆源；`.loom/memory/MEMORY.md` 是只读导出视图。');
   return items.map((item, i) => `${i + 1}. ${item}`).join('\n');
+}
+
+// 渲染「必读上下文」中的图后端条目
+function renderGraphBackendContextItem(graphBackend) {
+  switch (graphBackend) {
+    case 'codegraph':
+      return '图后端 codegraph：通过 `loom_graph_query` 查询；未启用时跳过图索引同步。';
+    case 'sourcegraph':
+      return '图后端 sourcegraph：通过 `loom_graph_query` 查询；未启用时跳过图索引同步。';
+    case 'scip':
+      return '图后端 scip：通过 `loom_graph_query` 查询；索引由用户自行生成（`.lsif` / `.scip`）。';
+    case 'none':
+      return '图后端未启用：所有代码查询走源码搜索和 git diff。';
+    default:
+      return `图后端 ${graphBackend}：通过 \`loom_graph_query\` 查询；未启用时跳过图索引同步。`;
+  }
+}
+
+// 渲染 agents.md 中的 {{GRAPH_BACKEND_DESC}} 占位符文案（上下文读取策略 + 完成前检查）
+function renderGraphBackendDesc(graphBackend) {
+  switch (graphBackend) {
+    case 'codegraph':
+      return '图后端 codegraph：通过 `loom_graph_query` 查询；不可用时跳过图查询并用源码搜索补充判断';
+    case 'sourcegraph':
+      return '图后端 sourcegraph：通过 `loom_graph_query` 查询；不可用时跳过图查询并用源码搜索补充判断';
+    case 'scip':
+      return '图后端 scip：通过 `loom_graph_query` 查询（需要 `.lsif` / `.scip` 索引文件）；不可用时跳过图查询并用源码搜索补充判断';
+    case 'none':
+      return '图后端未启用：所有代码查询走源码搜索和 git diff';
+    default:
+      return `图后端 ${graphBackend}：通过 \`loom_graph_query\` 查询；不可用时跳过图查询并用源码搜索补充判断`;
+  }
+}
+
+// 渲染 agents.md 中「完成前检查」里的图后端同步文案
+function renderGraphSyncDesc(graphBackend) {
+  switch (graphBackend) {
+    case 'codegraph':
+      return '新增/删除的路由、模块、命令、关键约定已同步图后端（`loom index`：后端可用时委派同步；不可用时注明已跳过）';
+    case 'sourcegraph':
+      return '新增/删除的路由、模块、命令、关键约定已同步图后端（`loom index`：后端可用时委派同步；不可用时注明已跳过）';
+    case 'scip':
+      return '新增/删除的路由、模块、命令、关键约定已同步图后端（`loom index`：后端可用时委派同步；不可用时注明已跳过）';
+    case 'none':
+      return '图后端未启用，无需同步图索引（确认关键改动已在源码和 git diff 中体现）';
+    default:
+      return `新增/删除的路由、模块、命令、关键约定已同步图后端（\`loom index\`：后端可用时委派同步；不可用时注明已跳过）`;
+  }
+}
+
+// 解析 --graph-backend 参数；默认 codegraph，与历史行为一致
+export function normalizeGraphBackend(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'codegraph';
+  const ALLOWED = new Set(['codegraph', 'sourcegraph', 'scip', 'none']);
+  if (!ALLOWED.has(normalized)) {
+    throw new Error(`Unsupported graph backend "${value}". Supported: codegraph, sourcegraph, scip, none.`);
+  }
+  return normalized;
+}
+
+function detectGraphBackend(explicit) {
+  if (explicit) return normalizeGraphBackend(explicit);
+  // 环境变量覆盖（CI/高安全环境可禁用图后端）
+  if (process.env.LOOM_GRAPH_BACKEND) return normalizeGraphBackend(process.env.LOOM_GRAPH_BACKEND);
+  return 'codegraph';
+}
+
+// 写入 .loom/graph.config.json
+function writeGraphConfig(root, backend, result, force) {
+  const config = buildGraphConfig(backend);
+  const target = join(root, '.loom', 'graph.config.json');
+  writeFile(target, `${JSON.stringify(config, null, 2)}\n`, result, force);
+}
+
+function buildGraphConfig(backend) {
+  const base = {
+    version: 1,
+    backend,
+    enabled: backend !== 'none',
+    requiredCapabilities: ['explore', 'definition', 'references', 'impact'],
+    fallback: { useSourceSearch: true, reportLimitations: true },
+    trust: { allowRepositoryAdapter: false, allowNetwork: false },
+  };
+  if (backend === 'none') {
+    base.requiredCapabilities = [];
+  }
+  return base;
+}
+
+// codegraph 后端：尝试 codegraph init 自动建图（向后兼容）；不可用时不失败
+function ensureCodegraphIndex(root, result) {
+  try {
+    execSync('codegraph init', { cwd: root, stdio: 'ignore', timeout: 30000 });
+    result.codegraphInit = 'ok';
+  } catch {
+    result.codegraphInit = 'unavailable (codegraph CLI not found or init failed; graph queries will be skipped)';
+  }
 }
 
 export function normalizeToolIds(value) {
@@ -566,6 +674,7 @@ function parseArgs(argv) {
     else if (arg === '--force') options.force = true;
     else if (arg === '--roles') options.roles = normalizeRoles(argv[++i]);
     else if (arg === '--tools') options.tools = normalizeToolIds(argv[++i]);
+    else if (arg === '--graph-backend') options.graphBackend = normalizeGraphBackend(argv[++i]);
     else if (arg === '--template-dir') options.templateDir = argv[++i];
   }
   return options;
@@ -574,8 +683,12 @@ function parseArgs(argv) {
 function printReport(result) {
   console.log(`loom init-project: ${result.projectName}`);
   console.log(`roles: ${result.roles.join(', ') || 'none'}`);
+  console.log(`graph backend: ${result.graphBackend}`);
   console.log(`tech stack: ${result.techStack}`);
   console.log(`tools: ${result.detectedTools.join(', ') || 'none'}`);
+  if (result.codegraphInit) {
+    console.log(`codegraph init: ${result.codegraphInit}`);
+  }
   console.log(`written: ${result.written.length}`);
   for (const file of result.written) {
     console.log(`  + ${relative(result.root, file)}`);

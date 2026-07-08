@@ -9,7 +9,7 @@
 3. `specs/<date+feature>/tasks/TN.md`（当前 task 详细内容，仅在 diff 不够理解时读取）
 4. `.loom/contexts/subagent-context.md`（精简项目约束，仅在涉及架构合规时读取）
 5. `specs/<date+feature>/spec.md`（仅读取 diff 涉及的章节，不要全文读取）
-6. codegraph（仅在需要分析影响范围且 codegraph 可用时使用 MCP 工具）
+6. 图后端（仅在需要分析影响范围且图后端可用时，通过 `loom_graph_query` 查询）
 
 **默认不全量读取 spec.md、plan.md。只在 diff 触及相关领域时按需读取对应章节。若变更跨 5+ 文件或涉及架构级重构，允许全文读取相关文件。**
 
@@ -22,7 +22,7 @@ handoff 仅用于定位文件；接口和行为必须以当前源码、真实 di
 - `specs/<date+feature>/spec.md`（按需读取相关章节）
 - `specs/<date+feature>/tasks/TN.md`（当前 task 详细内容）
 - `.loom/contexts/subagent-context.md`（精简项目约束）
-- 模块依赖和调用链：codegraph 可用时通过 MCP 工具实时查询（`codegraph_impact` / `codegraph_callers` / `codegraph_callees` / `codegraph_search`）；不可用时跳过图索引查询并用源码搜索补充判断。
+- 模块依赖和调用链：图后端可用时通过 `loom_graph_query` 实时查询（capability：`impact` / `callers` / `callees` / `symbolSearch`）；不可用时跳过图索引查询并用源码搜索补充判断。
 
 ## Part 1：规格审查
 
@@ -67,10 +67,10 @@ handoff 仅用于定位文件；接口和行为必须以当前源码、真实 di
 
 ### 维度 6：变更影响范围（阻断 / 警告）
 
-先确定索引后端，再对照本次 git diff 分析：
+先确定图后端状态（调 `loom_graph_status`），再对照本次 git diff 分析：
 
-- **codegraph 可用**（`.codegraph/` 存在或 MCP 工具可调）：用 `codegraph_impact` 确认改动影响半径，`codegraph_callers` / `codegraph_callees` 查上下游调用方，`codegraph_search` 定位符号。**优先走此路径**。
-- **codegraph 不可用**：跳过图索引查询，用源码搜索补充判断，并报告中注明"codegraph 不可用，索引查询已跳过"。
+- **图后端可用**（`.loom/graph.config.json` 存在且后端 marker 可用）：用 `loom_graph_query(capability="impact")` 确认改动影响半径，`capability="callers"` / `"callees"` 查上下游调用方，`capability="symbolSearch"` 定位符号。**优先走此路径**。后端不支持 `impact` 时用 `references`/`explore` 降级，并报告“影响范围可能不完整”。
+- **图后端不可用**（后端为 `none`、marker 不存在或 `freshness=unavailable`）：跳过图索引查询，用源码搜索补充判断，并报告中注明“图后端不可用，索引查询已跳过”。
 
 分析项：
 
@@ -85,7 +85,7 @@ handoff 仅用于定位文件；接口和行为必须以当前源码、真实 di
    - 影响跨模块调用链 → 中风险，警告
    - 影响公开接口或共享数据结构 → 高风险，阻断，需要补充影响说明
 
-影响范围判定见上方后端选择：codegraph 优先；不可用时用源码搜索补充判断并注明限制。
+影响范围判定见上方后端选择：图后端优先；不可用时用源码搜索补充判断并注明限制。
 
 ### 质量结果
 

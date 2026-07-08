@@ -33,7 +33,7 @@ loom 是一个 AI 工程化框架，把需求、规范、上下文、执行过�
 | loom-using-git-worktrees | feature 分支 | 创建隔离分支, +测试基线验证 |
 | loom-subagent-driven-development | 源码 + 测试报告 | Subagent 派发 + 双重审查,独立模板文件、4种状态处理 |
 | loom-verification-before-completion | 验证报告 | 完成前验证, +Spec覆盖、类型一致性、编译测试 |
-| loom-index-update | codegraph 同步 + 结构化记忆 | codegraph 同步 |
+| loom-index-update | 图后端同步 + 结构化记忆 | 图后端同步 |
 
 **辅助 Skills：**
 
@@ -73,5 +73,5 @@ loom 是一个 AI 工程化框架，把需求、规范、上下文、执行过�
 | 安全风险 | SQL 注入检查、认证/授权是否正确 |
 | 性能隐患 | N+1 查询检查、分页查询是否使用框架分页组件 |
 | 规范一致性 | 命名是否符合项目规范、响应格式是否统一 |
-| 变更影响范围 | 本次变更的函数、接口、类型是否被其他模块引用（codegraph 可用时查 codegraph_impact/codegraph_callers，否则用源码搜索补充判断）、公开接口的参数签名是否变化（新增必填参数、删除字段、类型变更） |
+| 变更影响范围 | 本次变更的函数、接口、类型是否被其他模块引用（图后端可用时通过 `loom_graph_query` 查 impact/callers，否则用源码搜索补充判断）、公开接口的参数签名是否变化（新增必填参数、删除字段、类型变更） |
 <!-- /loom:generate:review-summary -->
