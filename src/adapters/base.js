@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
 const MANAGED_SKILL_PREFIX = 'loom-';
+const REMOVE_DIR_OPTIONS = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 };
 
 /**
  * codegraph（https://github.com/colbymchenry/codegraph）的 MCP server 描述符，
@@ -89,7 +90,7 @@ export class BaseAdapter {
         if (!entry.isDirectory()) continue;
         if (srcNames.has(entry.name)) continue;
         if (!this._isManagedSkillName(entry.name)) continue;
-        rmSync(join(dest, entry.name), { recursive: true, force: true });
+        rmSync(join(dest, entry.name), REMOVE_DIR_OPTIONS);
         log.push(`  skills: removed stale ${entry.name}`);
       }
     }
@@ -107,7 +108,7 @@ export class BaseAdapter {
       if (!this._isManagedSkillName(entry.name)) continue;
       const skillDir = join(dest, entry.name, 'SKILL.md');
       if (!existsSync(skillDir)) continue;
-      rmSync(join(dest, entry.name), { recursive: true, force: true });
+      rmSync(join(dest, entry.name), REMOVE_DIR_OPTIONS);
       count++;
     }
     log.push(`  skills: ${count} removed from ${dest}`);
