@@ -3,7 +3,7 @@
 # 被 install.sh 和 uninstall.sh 共享
 
 REPO="xiqin/loom"
-VERSION="2.4.0"
+VERSION="3.0.0"
 # AUTO-SYNC: updated by scripts/generate-tooling.mjs and scripts/sync-version.mjs
 SUPPORTED_TOOLS=("claude-code" "cursor" "copilot" "opencode" "codex")
 
