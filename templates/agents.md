@@ -49,7 +49,7 @@
 2. **AI fallback**：信号模糊时调 AI（若注入 aiClient）从 `step_catalog` 选步骤
 3. **规则兜底**：无 AI 或 AI 失败时按风险等级生成基础流程
 
-选择器自动校验护栏：`must_include`（executing + verification）、`dependency_closure`（选 step 自动带 producer）、`never_skip_gates`（planning 后必插 approved）、`max_steps: 8`。
+选择器自动校验护栏：`must_include`（executing + verification）、`dependency_closure`（选 step 自动带 producer）、`never_skip_gates`（planning 后必插 approved）、`max_steps: 10`。
 
 结果必须先明确告知用户，并等待用户明确确认后才能初始化或执行。至少包含：
 
@@ -66,7 +66,7 @@
 **仅当以下情况**回退类型模式：
 
 - `loom_select_pipeline` 抛错或返回空 steps
-- 智能选择步骤超出 `max_steps=8`（提示用户拆分后仍超）
+- 智能选择步骤超出 `max_steps=10`（提示用户拆分后仍超）
 - `.loom/workflow.yaml` 缺少 `step_catalog` 或 `selection_rules`
 - 用户显式指定 `--type <X>` 跳过智能选择
 
@@ -139,7 +139,7 @@
 - **小改动**（单文件修复、配置调整）：智能选择会命中 `quickfix` 短路，跳过规划和审批。
 - **workflow.yaml 不可读**：停止执行，告知用户文件缺失，不得凭记忆假设流水线内容。
 - **步骤中途失败**：用 `loom run --fail <reason>` 记录失败，向用户报告失败原因和建议，等待指示。
-- **智能选择超 max_steps=8**：提示用户拆分需求；拆分后仍超则回退类型模式。
+- **智能选择超 max_steps=10**：提示用户拆分需求；拆分后仍超则回退类型模式。
 - **无上下文续跑**：先读 `loom_get_pipeline_context` / `loom_get_project_status` 或 `pipeline.state.json` + `progress.md`，以 `dynamic_steps` 和当前阶段为准继续执行；先看 `progress.md` 的 Handoffs 摘要，再按需读 `handoffs/<stage>.json`。
 - **需要人工调整步骤**：用 `loom select` 生成 `pipeline-plan.md`，调整后再 `--approve-pipeline`；不要把 `pipeline-plan.md` 作为默认续跑依据。
 - **quickfix 升级**：执行中发现改动涉及 2+ 文件或跨模块依赖，立即暂停并告知用户，建议升级为 `bugfix` 流水线。

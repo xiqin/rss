@@ -246,7 +246,7 @@ specs/<date+feature>/
 | spec_dir | string | 必填 | 规格目录绝对路径 |
 | pipeline_type | enum | feature/bugfix/hotfix/refactor/pm-prototype/chore/qa | 流水线类型 |
 | dynamic_steps | array | 可选 | AI 选择的动态步骤列表（优先于 pipeline_type 步骤） |
-| current_stage | enum | brainstorming/planning/approved/git-worktree/executing/verification/synced/failed | 当前阶段 |
+| current_stage | enum | brainstorming/planning/approved/git-worktree/executing/verification/code-review-request/review-gate/code-review-response/synced/failed | 当前阶段 |
 | started_at | ISO8601 | 必填 | 启动时间 |
 | updated_at | ISO8601 | 必填 | 最后更新时间 |
 | stage_history | array | 必填 | 阶段变更历史 |
@@ -433,12 +433,12 @@ specs/<date+feature>/
 
 | 类型 | 步骤序列 | 特点 |
 |------|----------|------|
-| feature | brainstorming → planning → approved → git-worktree → executing → verification → synced | 完整六步，含分支隔离 |
-| bugfix | planning → approved → executing → verification → synced | 跳过头脑风暴和分支创建 |
-| hotfix | approved → executing → verification | 最小步骤，max_retries=1 |
-| refactor | brainstorming → planning → approved → executing → verification → synced | 有方案对比，不开新分支 |
+| feature | brainstorming → planning → approved → git-worktree → executing → verification → code-review → synced | 完整流程，含分支隔离和对抗审查 |
+| bugfix | planning → approved → executing → verification → code-review → synced | 跳过头脑风暴和分支创建，保留对抗审查 |
+| hotfix | approved → executing → verification | 最小步骤，max_retries=1，紧急跳过对抗审查 |
+| refactor | brainstorming → planning → approved → executing → verification → code-review → synced | 有方案对比，不开新分支，保留对抗审查 |
 | pm-prototype | brainstorming → spec-approved → prototype | PM 专用，直出 HTML 原型 |
-| chore | executing → verification | 低风险改动，无需审批 |
+| chore | executing → verification | 低风险改动，无需审批和对抗审查 |
 | qa | qa-analysis → qa-design → qa-approved → qa-execution → qa-signoff → qa-report | QA 验收流水线，含两次 human-approval gate |
 
 凡 step.outputs 声明 `handoffs/<stage>.json` 的阶段，都必须在推进前写入对应阶段 handoff；终止阶段同样先校验 outputs，再返回流水线已结束。阶段 handoff 写入后，宿主 AI 必须立即调用当前环境的上下文压缩能力压缩旧阶段原始对话和长日志，再以 `compression_confirmed=true` 调用 MCP `loom_advance_pipeline`，或用 CLI `loom run --advance --compression-confirmed` 推进。`loom_stage_checkpoint` 只负责写 handoff 和返回紧凑上下文，不在同一次调用内推进，避免跳过可插入的自动压缩点。未声明 handoff output 的阶段不会触发上下文压缩门禁。

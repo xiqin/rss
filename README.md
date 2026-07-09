@@ -208,18 +208,18 @@ loom evidence --trends --out .loom/evidence/trends.json
 
 ### 流水线类型
 
-| 类型           | 适用场景                       | 包含步骤                                                                               |
-| -------------- | ------------------------------ | -------------------------------------------------------------------------------------- |
-| `feature`      | 新功能开发                     | brainstorming → planning → approved → git-worktree → executing → verification → synced |
-| `bugfix`       | 已定位的 bug 修复              | planning → approved → executing → verification → synced                                |
-| `hotfix`       | 生产紧急问题                   | approved → executing → verification                                                    |
-| `refactor`     | 代码重构                       | brainstorming → planning → approved → executing → verification → synced                |
-| `quickfix`     | 单文件小改动、已知 bug 小修复  | executing → verification                                                               |
-| `chore`        | 依赖升级、配置调整、文档更新等 | executing → verification                                                               |
-| `qa`           | QA 验收测试                    | qa-analysis → qa-design → qa-approved → qa-execution → qa-signoff → qa-report          |
-| `pm-prototype` | PM 原型探索                    | brainstorming → spec-approved → prototype                                              |
+| 类型           | 适用场景                       | 包含步骤                                                                                                          |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `feature`      | 新功能开发                     | brainstorming → planning → approved → git-worktree → executing → verification → code-review → synced             |
+| `bugfix`       | 已定位的 bug 修复              | planning → approved → executing → verification → code-review → synced                                             |
+| `hotfix`       | 生产紧急问题                   | approved → executing → verification                                                                               |
+| `refactor`     | 代码重构                       | brainstorming → planning → approved → executing → verification → code-review → synced                             |
+| `quickfix`     | 单文件小改动、已知 bug 小修复  | executing → verification                                                                                          |
+| `chore`        | 依赖升级、配置调整、文档更新等 | executing → verification                                                                                           |
+| `qa`           | QA 验收测试                    | qa-analysis → qa-design → qa-approved → qa-execution → qa-signoff → qa-report                                      |
+| `pm-prototype` | PM 原型探索                    | brainstorming → spec-approved → prototype                                                                          |
 
-AI 收到任务后会先判断类型并告知用户，必须等用户明确确认后再初始化或读取对应流水线执行。未指定类型时默认使用 `feature`。
+AI 收到任务后会先判断类型并告知用户，必须等用户明确确认后再初始化或读取对应流水线执行。未指定类型时默认使用 `feature`。`code-review` 为对抗审查段（code-review-request → review-gate → code-review-response），低风险流水线（hotfix/quickfix/chore）跳过。
 
 ### feature 流水线步骤
 
@@ -230,7 +230,10 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 | 3    | git-worktree                | 创建隔离分支                                              | feature 分支                                 |
 | 4    | subagent-driven-development | Subagent 隔离派发 + 双审查                                | 源码 + 测试报告                              |
 | 5    | verification                | 完成前验证，Spec覆盖/类型一致性/编译测试                  | 验证报告                                     |
-| 6    | index-update                | codegraph 同步与结构化记忆更新（无 codegraph 时跳过索引） | codegraph 图索引 / `.loom/memory/store.json` |
+| 6    | code-review-request         | 双轴预审查（Standards + Spec），生成审查请求             | `review-request.md`                          |
+| 7    | review-gate                 | 人工 gate，等待审查者反馈                                 | —                                            |
+| 8    | code-review-response        | 处理审查反馈，修复 BLOCKER，push back 不合理建议          | `review-response.md`                         |
+| 9    | index-update                | codegraph 同步与结构化记忆更新（无 codegraph 时跳过索引） | codegraph 图索引 / `.loom/memory/store.json` |
 
 ### 代码审查
 

@@ -47,7 +47,7 @@ user-invocable: true
 | quickfix             | typo/错别字/单文件/小修复                 | ≤1             | executing, verification                             |
 | chore                | 依赖升级/npm update/配置调整/bump version | —              | executing, verification                             |
 | hotfix               | 生产紧急/线上故障/P0/hotfix               | —              | approved, executing, verification                   |
-| bugfix-no-brainstorm | bug/修复/fix + 根因明确                   | ≤5             | planning, approved, executing, verification, synced |
+| bugfix-no-brainstorm | bug/修复/fix + 根因明确                   | ≤5             | planning, approved, executing, verification, code-review-request, review-gate, code-review-response, synced |
 
 命中即返回，不调 AI。
 
@@ -62,8 +62,8 @@ user-invocable: true
 按风险等级生成基础流程：
 
 - **low**：executing → verification
-- **medium**：planning → approved → executing → verification → synced
-- **high**：brainstorming（若 spec 不存在）→ planning → approved → git-worktree（若不在 worktree）→ executing → verification → synced
+- **medium**：planning → approved → executing → verification → code-review-request → review-gate → code-review-response → synced
+- **high**：brainstorming（若 spec 不存在）→ planning → approved → git-worktree（若不在 worktree）→ executing → verification → code-review-request → review-gate → code-review-response → synced
 
 ### Step 5：校验与修正（`_validateAndFix`）
 
@@ -72,7 +72,7 @@ user-invocable: true
 - `must_include`：executing + verification 必须在列
 - `dependency_closure`：选 executing 但无 plan.md → 自动补 planning；选 planning 但无 spec.md → 自动补 brainstorming
 - `never_skip_gates`：planning 后必插 approved（low risk 除外）
-- `max_steps: 8`：超出报错
+- `max_steps: 10`：超出报错
 
 ### Step 6：输出与确认门禁
 
@@ -129,7 +129,7 @@ user-invocable: true
 - **不跳 mandatory step**：executing、verification 不可省
 - **不跳 gate**：approved（human-approval）必须保留
 - **依赖闭包**：选 step 必须带 producer
-- **max_steps**：≤8
+- **max_steps**：≤10
 
 ## 失败处理
 

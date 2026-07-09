@@ -37,7 +37,7 @@ const writePassingReport = (dir, file, command = 'npm test') => {
 };
 
 describe('feature pipeline end-to-end (real workflow.yaml)', () => {
-  it('walks brainstorming → planning → approved → git-worktree → executing → verification → synced', () => {
+  it('walks brainstorming → planning → approved → git-worktree → executing → verification → code-review → synced', () => {
     const { root, specDir } = setupRealProject();
     const engine = new PipelineEngine(root, specDir);
     engine.initialize('feature');
@@ -67,9 +67,23 @@ describe('feature pipeline end-to-end (real workflow.yaml)', () => {
     writeStageHandoff(engine, 'executing', ['test-report.md']);
     expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'verification' });
 
-    // verification → synced requires verify-report PASS
+    // verification → code-review-request requires verify-report PASS
     writePassingReport(specDir, 'verify-report.md', 'npm run build');
     writeStageHandoff(engine, 'verification', ['verify-report.md']);
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'code-review-request' });
+
+    // code-review-request → review-gate (审查请求产出后进入人工 gate)
+    write(specDir, 'review-request.md', '# 代码审查请求\nverdict: PASS');
+    writeStageHandoff(engine, 'code-review-request', ['review-request.md']);
+    expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'review-gate' });
+
+    // review-gate: must approve, cannot auto-advance
+    expect(engine.advance().ok).toBe(false);
+    expect(engine.approve()).toMatchObject({ ok: true, to: 'code-review-response' });
+
+    // code-review-response → synced
+    write(specDir, 'review-response.md', '# 审查反馈响应\nverdict: PASS');
+    writeStageHandoff(engine, 'code-review-response', ['review-response.md']);
     expect(engine.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'synced' });
 
     expect(engine.currentStage()).toBe('synced');

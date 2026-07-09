@@ -82,12 +82,32 @@ pipelines:
 
       - id: verification
         skill: loom-verification-before-completion
-        next: synced
+        next: code-review-request
         requires: [spec.md, test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
         description: "完成前验证：spec 覆盖 / 类型一致性 / 编译测试"
+
+      - id: code-review-request
+        skill: loom-requesting-code-review
+        next: review-gate
+        requires: [verify-report.md, spec.md]
+        outputs: [review-request.md, handoffs/code-review-request.json]
+        description: "双轴预审查（Standards + Spec）后生成代码审查请求"
+
+      - id: review-gate
+        gate: human-approval
+        description: "审查请求已发出，等待审查者反馈到达后继续"
+        requires: [review-request.md]
+        next: code-review-response
+
+      - id: code-review-response
+        skill: loom-receiving-code-review
+        next: synced
+        requires: [review-request.md]
+        outputs: [review-response.md, handoffs/code-review-response.json]
+        description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
       - id: synced
         skill: loom-index-update
@@ -121,12 +141,32 @@ pipelines:
 
       - id: verification
         skill: loom-verification-before-completion
-        next: synced
+        next: code-review-request
         requires: [test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
         description: "验证修复：回归测试 / 边界用例"
+
+      - id: code-review-request
+        skill: loom-requesting-code-review
+        next: review-gate
+        requires: [verify-report.md]
+        outputs: [review-request.md, handoffs/code-review-request.json]
+        description: "双轴预审查（Standards + Spec）后生成代码审查请求"
+
+      - id: review-gate
+        gate: human-approval
+        description: "审查请求已发出，等待审查者反馈到达后继续"
+        requires: [review-request.md]
+        next: code-review-response
+
+      - id: code-review-response
+        skill: loom-receiving-code-review
+        next: synced
+        requires: [review-request.md]
+        outputs: [review-response.md, handoffs/code-review-response.json]
+        description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
       - id: synced
         skill: loom-index-update
@@ -194,12 +234,32 @@ pipelines:
 
       - id: verification
         skill: loom-verification-before-completion
-        next: synced
+        next: code-review-request
         requires: [test-report.md]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
         description: "验证：行为一致性 / 性能对比 / 类型检查"
+
+      - id: code-review-request
+        skill: loom-requesting-code-review
+        next: review-gate
+        requires: [verify-report.md, spec.md]
+        outputs: [review-request.md, handoffs/code-review-request.json]
+        description: "双轴预审查（Standards + Spec）后生成代码审查请求"
+
+      - id: review-gate
+        gate: human-approval
+        description: "审查请求已发出，等待审查者反馈到达后继续"
+        requires: [review-request.md]
+        next: code-review-response
+
+      - id: code-review-response
+        skill: loom-receiving-code-review
+        next: synced
+        requires: [review-request.md]
+        outputs: [review-response.md, handoffs/code-review-response.json]
+        description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
       - id: synced
         skill: loom-index-update
@@ -355,6 +415,24 @@ step_catalog:
     description: "图后端同步与结构化记忆更新"
     skip_when: "图后端未启用 + 无记忆更新"
 
+  code-review-request:
+    skill: loom-requesting-code-review
+    requires: [verify-report.md]
+    outputs: [review-request.md, handoffs/code-review-request.json]
+    description: "双轴预审查（Standards + Spec）后生成代码审查请求"
+    skip_when: "低风险小改动 / 用户明确跳过人工审查"
+
+  review-gate:
+    gate: human-approval
+    description: "等待审查者反馈到达后继续（审查请求已发出，人工或外部审查者回看）"
+    requires: [review-request.md]
+
+  code-review-response:
+    skill: loom-receiving-code-review
+    requires: [review-request.md]
+    outputs: [review-response.md, handoffs/code-review-response.json]
+    description: "处理审查反馈：BLOCKER 修复 / SUGGESTION 采纳或拒绝 / 讨论项沟通，修复后重跑测试"
+
 # ─────────────────────────────────────────
 # 选择规则 — AI 决策约束 + 规则短路
 # ─────────────────────────────────────────
@@ -363,7 +441,7 @@ selection_rules:
   must_include: [executing, verification]
   never_skip_gates: true          # human-approval gate 不可跳
   dependency_closure: true        # 选 step 必须带依赖闭包
-  max_steps: 8                    # 防止过度膨胀
+  max_steps: 10                   # 防止过度膨胀（含对抗审查三步后 feature 最长 10 步）
 
   # 规则短路：明确信号 → 直接返回固定 pipeline，0 token
   short_circuits:
@@ -388,7 +466,7 @@ selection_rules:
         keywords_any: [bug, 修复, fix, 缺陷]
         has_root_cause: true
         file_scope_max: 5
-      steps: [planning, approved, executing, verification, synced]
+      steps: [planning, approved, executing, verification, code-review-request, review-gate, code-review-response, synced]
 
   # 风险等级 → 推荐策略
   risk_profiles:

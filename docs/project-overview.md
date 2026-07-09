@@ -147,7 +147,7 @@ specs/<date+feature>/
 
 ```
 brainstorming → planning → approved(gate) → git-worktree → executing
-   → verification → synced
+   → verification → code-review-request → review-gate(gate) → code-review-response → synced
    ↑                  └─ blocker_found → executing (增量修复)
    └─ 任何阶段 error → failed → (user_retries) → 回到合适阶段
 ```
@@ -156,13 +156,15 @@ brainstorming → planning → approved(gate) → git-worktree → executing
 
 | 类型 | 步骤序列 | 适用 |
 |------|----------|------|
-| feature | brainstorming→planning→approved→git-worktree→executing→verification→synced | 新功能 |
-| bugfix | planning→approved→executing→verification→synced | 已定位 bug |
+| feature | brainstorming→planning→approved→git-worktree→executing→verification→code-review→synced | 新功能 |
+| bugfix | planning→approved→executing→verification→code-review→synced | 已定位 bug |
 | hotfix | approved→executing→verification（max_retries=1） | 生产紧急 |
-| refactor | brainstorming→planning→approved→executing→verification→synced | 重构（不开新分支） |
+| refactor | brainstorming→planning→approved→executing→verification→code-review→synced | 重构（不开新分支） |
 | quickfix | executing→verification | 单文件小改 |
 | chore | executing→verification | 依赖/配置/文档 |
 | qa | qa-analysis→qa-design→qa-approved→qa-execution→qa-signoff→qa-report | QA 验收（两次人工 gate） |
+
+`code-review` 段含三步：code-review-request（双轴预审查+发请求）→ review-gate（人工 gate）→ code-review-response（处理反馈）。低风险流水线（hotfix/quickfix/chore）跳过。
 
 ### 5.3 智能选择模式（`loom run --auto --request "<text>"` 或 MCP `loom_select_pipeline`）
 

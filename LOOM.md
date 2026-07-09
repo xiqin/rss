@@ -12,7 +12,7 @@
 示例：
 
 ```
-brainstorming → writing-plans → git-worktree → subagent-dev → verification → index-update
+brainstorming → writing-plans → git-worktree → subagent-dev → verification → code-review → index-update
 ```
 
 ## 项目规则
@@ -28,7 +28,7 @@ brainstorming → writing-plans → git-worktree → subagent-dev → verificati
 3. 使用 `/loom-brainstorm` 开始需求分析，生成 `specs/<date+feature>/spec.md`
 4. 使用 `/loom-write-plan` 拆解实现计划，生成 `plan.md`
 5. 使用 `/loom-execute-plan` 派发 subagent 执行编码
-6. 编码完成后自动触发 index-update 同步 codegraph 和结构化记忆
+6. 编码完成后依次触发对抗审查（code-review-request → review-gate → code-review-response）和 index-update 同步 codegraph 和结构化记忆
 
 ## Skills 清单
 

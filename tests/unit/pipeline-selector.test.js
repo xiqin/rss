@@ -82,14 +82,14 @@ describe('PipelineSelector', () => {
       expect(ids).toContain('synced');
     });
 
-    it('medium risk → planning + approved + executing + verification + synced', async () => {
+    it('medium risk → planning + approved + executing + verification + code-review + synced', async () => {
       const specDir = setupSpecDir();
       writeFileSync(join(specDir, 'spec.md'), '# Spec');
       const sel = new PipelineSelector(projectRoot, specDir);
       const result = await sel.select('加个新功能 feature');
       expect(result.risk).toBe('medium');
       const ids = result.steps.map(s => s.id);
-      expect(ids).toEqual(['planning', 'approved', 'executing', 'verification', 'synced']);
+      expect(ids).toEqual(['planning', 'approved', 'executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced']);
     });
 
     it('skips brainstorming when spec.md exists', async () => {
@@ -168,7 +168,9 @@ describe('PipelineSelector', () => {
       const sel = new PipelineSelector(projectRoot);
       expect(() => sel._validateAndFix(
         ['brainstorming', 'planning', 'approved', 'git-worktree',
-         'executing', 'verification', 'synced', 'extra1', 'extra2'],
+         'executing', 'verification',
+         'code-review-request', 'review-gate', 'code-review-response',
+         'synced', 'extra1'],
         { fileScope: 3 }
       )).toThrow(/max_steps/);
     });
@@ -182,6 +184,17 @@ describe('PipelineSelector', () => {
       const approved = steps.find(s => s.id === 'approved');
       expect(approved).toBeDefined();
       expect(approved.gate).toBe('human-approval');
+    });
+
+    it('marks review-gate step with human-approval gate from catalog', () => {
+      const sel = new PipelineSelector(projectRoot);
+      const steps = sel._validateAndFix(
+        ['executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response'],
+        { fileScope: 3, hasSpecExists: true }
+      );
+      const reviewGate = steps.find(s => s.id === 'review-gate');
+      expect(reviewGate).toBeDefined();
+      expect(reviewGate.gate).toBe('human-approval');
     });
 
     it('sorts steps in canonical order', () => {

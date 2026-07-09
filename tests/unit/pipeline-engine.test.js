@@ -255,7 +255,7 @@ step_catalog:
     description: "synced"
 selection_rules:
   must_include: [executing, verification]
-  max_steps: 8
+  max_steps: 10
 `;
 
   it('initialize with dynamicSteps uses them as steps', () => {

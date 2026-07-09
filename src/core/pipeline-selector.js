@@ -25,7 +25,9 @@ const ROOT_CAUSE_RE = /根因|root\s*cause|已定位|定位到|根因明确/i;
 
 const STEP_ORDER = [
   'brainstorming', 'planning', 'approved', 'git-worktree',
-  'executing', 'verification', 'synced'
+  'executing', 'verification',
+  'code-review-request', 'review-gate', 'code-review-response',
+  'synced'
 ];
 
 export class PipelineSelector {
@@ -200,8 +202,8 @@ export class PipelineSelector {
     if (risk === 'medium') {
       return {
         name: 'medium-risk',
-        steps: ['planning', 'approved', 'executing', 'verification', 'synced'],
-        reasoning: '中等风险，需规划 + 审批 + 验证 + 同步',
+        steps: ['planning', 'approved', 'executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced'],
+        reasoning: '中等风险，需规划 + 审批 + 验证 + 对抗审查 + 同步',
         risk
       };
     }
@@ -210,11 +212,11 @@ export class PipelineSelector {
     if (!signals.hasSpecExists) steps.push('brainstorming');
     steps.push('planning', 'approved');
     if (!signals.inWorktree) steps.push('git-worktree');
-    steps.push('executing', 'verification', 'synced');
+    steps.push('executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced');
     return {
       name: 'high-risk',
       steps,
-      reasoning: '高风险，完整流程 + 隔离分支',
+      reasoning: '高风险，完整流程 + 隔离分支 + 对抗审查',
       risk
     };
   }
@@ -304,7 +306,7 @@ export class PipelineSelector {
         skill: def.skill ?? null,
         requires: def.requires || [],
         outputs: def.outputs || [],
-        gate: id === 'approved' ? 'human-approval' : undefined,
+        gate: def.gate ?? (id === 'approved' ? 'human-approval' : undefined),
         gate_verdict: def.gate_verdict,
         description: def.description || ''
       };
@@ -373,7 +375,7 @@ export class PipelineSelector {
 
     const rules = this.workflow?.selection_rules || {};
     const mustInclude = rules.must_include || [];
-    const maxSteps = rules.max_steps || 8;
+    const maxSteps = rules.max_steps || 10;
 
     let ids = [...new Set(stepIds)];
 
@@ -400,7 +402,7 @@ export class PipelineSelector {
         skill: def.skill ?? null,
         requires: def.requires || [],
         outputs: def.outputs || [],
-        gate: id === 'approved' ? 'human-approval' : undefined,
+        gate: def.gate ?? (id === 'approved' ? 'human-approval' : undefined),
         gate_verdict: def.gate_verdict,
         description: def.description || ''
       };
