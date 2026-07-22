@@ -13,6 +13,8 @@
 #   requires:     进入本阶段前必须存在的文件/目录（尾 / 表示目录）
 #   gate_verdict: 离开本阶段前须读取该文件且 verdict===PASS
 #   evidence_required: PASS 时须校验落盘日志的 command/exit-code/path/sha256 收据
+#   validators:   离开本阶段前必须通过的确定性校验器
+#   approval_requires: human-approval gate 通过前必须存在的文件/目录
 
 # ─────────────────────────────────────────
 # 全局配置
@@ -48,16 +50,33 @@ pipelines:
     steps:
       - id: brainstorming
         skill: loom-brainstorming
-        next: planning
-        outputs: [spec.md, handoffs/brainstorming.json]
+        next: detail-expansion
+        outputs: [spec.md, requirements.json, handoffs/brainstorming.json]
         description: "需求头脑风暴，探索 2-3 种实现方案，输出 spec.md"
+
+      - id: detail-expansion
+        skill: loom-detail-expansion
+        next: planning
+        requires: [spec.md, requirements.json]
+        outputs: [requirements.json, handoffs/detail-expansion.json]
+        validators: [detail-expansion-pass]
+        description: "按 15 维度展开 behavior 强制清单，补齐 test_plan 与 applicability"
 
       - id: planning
         skill: loom-writing-plans
-        next: approved
-        requires: [spec.md]
-        outputs: [plan.md, tasks/, handoffs/planning.json]
+        next: analyze-artifacts
+        requires: [spec.md, requirements.json]
+        outputs: [plan.md, tasks/, traceability.json, handoffs/planning.json]
+        validators: [planning-artifacts]
         description: "分层拆解实现计划，输出 plan.md"
+
+      - id: analyze-artifacts
+        skill: loom-analyze-artifacts
+        next: approved
+        requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json]
+        outputs: [handoffs/analyze-artifacts.json]
+        validators: [artifact-analysis-pass]
+        description: "planning 后审批前跨产物一致性只读分析"
 
       - id: approved
         gate: human-approval
@@ -67,26 +86,36 @@ pipelines:
       - id: git-worktree
         skill: loom-using-git-worktrees
         next: executing
-        requires: [spec.md, plan.md]
+        requires: [spec.md, requirements.json, plan.md, traceability.json]
         outputs: []
         description: "创建隔离 feature 分支"
 
       - id: executing
         skill: loom-subagent-driven-development
-        next: verification
-        requires: [spec.md, plan.md, tasks/]
-        outputs: [test-report.md, handoffs/executing.json]
+        next: converge
+        requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json]
+        outputs: [test-report.md, traceability.json, handoffs/executing.json]
         gate_verdict: test-report.md
         evidence_required: true
+        validators: [task-state-closure, requirement-task-closure]
         description: "subagent 并行编码执行"
+
+      - id: converge
+        skill: loom-converge
+        next: verification
+        requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json, test-report.md]
+        outputs: [handoffs/converge.json]
+        validators: [convergence-pass]
+        description: "对照意图清单分类覆盖度，missing/partial 回流 executing，内部调用 omission-hunter"
 
       - id: verification
         skill: loom-verification-before-completion
         next: code-review-request
-        requires: [spec.md, test-report.md]
+        requires: [spec.md, requirements.json, traceability.json, test-report.md, convergence-report.json]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
+        validators: [verification-artifacts]
         description: "完成前验证：spec 覆盖 / 类型一致性 / 编译测试"
 
       - id: code-review-request
@@ -100,12 +129,13 @@ pipelines:
         gate: human-approval
         description: "审查请求已发出，等待审查者反馈到达后继续"
         requires: [review-request.md]
+        approval_requires: [review-feedback.md]
         next: code-review-response
 
       - id: code-review-response
         skill: loom-receiving-code-review
         next: synced
-        requires: [review-request.md]
+        requires: [review-request.md, review-feedback.md]
         outputs: [review-response.md, handoffs/code-review-response.json]
         description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
@@ -137,6 +167,7 @@ pipelines:
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
         evidence_required: true
+        validators: [task-state-closure, requirement-task-closure]
         description: "执行修复"
 
       - id: verification
@@ -146,6 +177,7 @@ pipelines:
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
+        validators: [verification-artifacts]
         description: "验证修复：回归测试 / 边界用例"
 
       - id: code-review-request
@@ -159,12 +191,13 @@ pipelines:
         gate: human-approval
         description: "审查请求已发出，等待审查者反馈到达后继续"
         requires: [review-request.md]
+        approval_requires: [review-feedback.md]
         next: code-review-response
 
       - id: code-review-response
         skill: loom-receiving-code-review
         next: synced
-        requires: [review-request.md]
+        requires: [review-request.md, review-feedback.md]
         outputs: [review-response.md, handoffs/code-review-response.json]
         description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
@@ -189,6 +222,7 @@ pipelines:
         outputs: [test-report.md, handoffs/executing.json]
         gate_verdict: test-report.md
         evidence_required: true
+        validators: [task-state-closure, requirement-task-closure]
         description: "执行热修复"
         config:
           max_retries: 1 # 热修复不允许无限重试，失败立即上报
@@ -207,16 +241,33 @@ pipelines:
     steps:
       - id: brainstorming
         skill: loom-brainstorming
-        next: planning
-        outputs: [spec.md, handoffs/brainstorming.json]
+        next: detail-expansion
+        outputs: [spec.md, requirements.json, handoffs/brainstorming.json]
         description: "对比重构策略（如：逐步迁移 vs 整体替换）"
+
+      - id: detail-expansion
+        skill: loom-detail-expansion
+        next: planning
+        requires: [spec.md, requirements.json]
+        outputs: [requirements.json, handoffs/detail-expansion.json]
+        validators: [detail-expansion-pass]
+        description: "按 15 维度展开 behavior 强制清单"
 
       - id: planning
         skill: loom-writing-plans
-        next: approved
-        requires: [spec.md]
-        outputs: [plan.md, tasks/, handoffs/planning.json]
+        next: analyze-artifacts
+        requires: [spec.md, requirements.json]
+        outputs: [plan.md, tasks/, traceability.json, handoffs/planning.json]
+        validators: [planning-artifacts]
         description: "拆解重构步骤，明确回滚边界"
+
+      - id: analyze-artifacts
+        skill: loom-analyze-artifacts
+        next: approved
+        requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json]
+        outputs: [handoffs/analyze-artifacts.json]
+        validators: [artifact-analysis-pass]
+        description: "planning 后审批前跨产物一致性只读分析"
 
       - id: approved
         gate: human-approval
@@ -225,20 +276,30 @@ pipelines:
 
       - id: executing
         skill: loom-subagent-driven-development
-        next: verification
-        requires: [plan.md, tasks/]
-        outputs: [test-report.md, handoffs/executing.json]
+        next: converge
+        requires: [requirements.json, plan.md, tasks/, traceability.json]
+        outputs: [test-report.md, traceability.json, handoffs/executing.json]
         gate_verdict: test-report.md
         evidence_required: true
+        validators: [task-state-closure, requirement-task-closure]
         description: "执行重构"
+
+      - id: converge
+        skill: loom-converge
+        next: verification
+        requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json, test-report.md]
+        outputs: [handoffs/converge.json]
+        validators: [convergence-pass]
+        description: "对照意图清单分类覆盖度，missing/partial 回流 executing"
 
       - id: verification
         skill: loom-verification-before-completion
         next: code-review-request
-        requires: [test-report.md]
+        requires: [requirements.json, traceability.json, test-report.md, convergence-report.json]
         outputs: [verify-report.md, handoffs/verification.json]
         gate_verdict: verify-report.md
         evidence_required: true
+        validators: [verification-artifacts]
         description: "验证：行为一致性 / 性能对比 / 类型检查"
 
       - id: code-review-request
@@ -252,12 +313,13 @@ pipelines:
         gate: human-approval
         description: "审查请求已发出，等待审查者反馈到达后继续"
         requires: [review-request.md]
+        approval_requires: [review-feedback.md]
         next: code-review-response
 
       - id: code-review-response
         skill: loom-receiving-code-review
         next: synced
-        requires: [review-request.md]
+        requires: [review-request.md, review-feedback.md]
         outputs: [review-response.md, handoffs/code-review-response.json]
         description: "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试"
 
@@ -296,6 +358,7 @@ pipelines:
         skill: null
         next: verification
         outputs: [handoffs/executing.json]
+        validators: [task-state-closure, requirement-task-closure]
         description: "直接执行改动（不使用 subagent）"
 
       - id: verification
@@ -312,6 +375,7 @@ pipelines:
       - id: executing
         skill: null
         outputs: [handoffs/executing.json]
+        validators: [task-state-closure, requirement-task-closure]
         description: "直接执行改动"
 
       - id: verification
@@ -372,39 +436,69 @@ step_catalog:
   brainstorming:
     skill: loom-brainstorming
     requires: []
-    outputs: [spec.md, handoffs/brainstorming.json]
+    outputs: [spec.md, requirements.json, handoffs/brainstorming.json]
     description: "需求头脑风暴，探索 2-3 种实现方案"
     skip_when: "根因明确 + 改动范围已知"
 
+  detail-expansion:
+    skill: loom-detail-expansion
+    requires: [spec.md, requirements.json]
+    outputs: [requirements.json, handoffs/detail-expansion.json]
+    validators: [detail-expansion-pass]
+    description: "按 15 维度展开 behavior 强制清单，补齐 test_plan 与 applicability"
+    skip_when: "无 spec/requirements.json（如纯配置类 quickfix/chore）"
+    mandatory: true
+
   planning:
     skill: loom-writing-plans
-    requires: [spec.md]
-    outputs: [plan.md, tasks/, handoffs/planning.json]
+    requires: [spec.md, requirements.json]
+    outputs: [plan.md, tasks/, traceability.json, handoffs/planning.json]
+    validators: [planning-artifacts]
     description: "分层拆解实现计划"
     skip_when: "单文件改动 + 无架构影响"
 
+  analyze-artifacts:
+    skill: loom-analyze-artifacts
+    requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json]
+    outputs: [handoffs/analyze-artifacts.json]
+    validators: [artifact-analysis-pass]
+    description: "planning 后审批前跨产物一致性只读分析"
+    skip_when: "无 spec/requirements.json 的轻量流程"
+    mandatory: true
+
   git-worktree:
     skill: loom-using-git-worktrees
-    requires: [plan.md]
+    requires: [plan.md, traceability.json]
     outputs: []
     description: "创建隔离 feature 分支"
     skip_when: "已在 worktree 内 / 用户偏好直接改"
 
   executing:
     skill: loom-subagent-driven-development
-    requires: [plan.md, tasks/]
-    outputs: [test-report.md, handoffs/executing.json]
+    requires: [plan.md, tasks/, traceability.json]
+    outputs: [test-report.md, traceability.json, handoffs/executing.json]
     gate_verdict: test-report.md
     evidence_required: true
+    validators: [task-state-closure, requirement-task-closure]
     description: "subagent 并行编码执行"
+    mandatory: true
+
+  converge:
+    skill: loom-converge
+    requires: [spec.md, requirements.json, plan.md, tasks/, traceability.json, test-report.md]
+    outputs: [handoffs/converge.json]
+    validators: [convergence-pass]
+    description: "executing 后 verification 前对照意图清单，missing/partial 回流 executing，内部调用 omission-hunter"
+    skip_when: "无 spec/requirements.json 的轻量流程"
     mandatory: true
 
   verification:
     skill: loom-verification-before-completion
-    requires: [test-report.md]
+    requires: [test-report.md, traceability.json]
     outputs: [verify-report.md, handoffs/verification.json]
     gate_verdict: verify-report.md
     evidence_required: true
+    validators: [verification-artifacts]
     description: "spec 覆盖 / 类型一致性 / 编译测试"
     mandatory: true
 
@@ -426,10 +520,11 @@ step_catalog:
     gate: human-approval
     description: "等待审查者反馈到达后继续（审查请求已发出，人工或外部审查者回看）"
     requires: [review-request.md]
+    approval_requires: [review-feedback.md]
 
   code-review-response:
     skill: loom-receiving-code-review
-    requires: [review-request.md]
+    requires: [review-request.md, review-feedback.md]
     outputs: [review-response.md, handoffs/code-review-response.json]
     description: "处理审查反馈：BLOCKER 修复 / SUGGESTION 采纳或拒绝 / 讨论项沟通，修复后重跑测试"
 
@@ -441,7 +536,7 @@ selection_rules:
   must_include: [executing, verification]
   never_skip_gates: true          # human-approval gate 不可跳
   dependency_closure: true        # 选 step 必须带依赖闭包
-  max_steps: 10                   # 防止过度膨胀（含对抗审查三步后 feature 最长 10 步）
+  max_steps: 13                   # feature 完整链含 detail-expansion/analyze-artifacts/converge 后为 13 步
 
   # 规则短路：明确信号 → 直接返回固定 pipeline，0 token
   short_circuits:
@@ -450,11 +545,17 @@ selection_rules:
         keywords_any: [typo, 错别字, 单文件, 小修复, 小改动, 文案]
         file_scope_max: 1
       steps: [executing, verification]
+      skip_closure: true
+      skip_gate: true
+      skip_mandatory: true
 
     - name: chore
       match:
         keywords_any: [依赖升级, npm update, npm install, 配置调整, bump version, 依赖更新, package.json]
       steps: [executing, verification]
+      skip_closure: true
+      skip_gate: true
+      skip_mandatory: true
 
     - name: hotfix
       match:

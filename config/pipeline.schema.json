@@ -11,7 +11,7 @@
       "command": "loom-brainstorm",
       "description": "需求头脑风暴，探索 2-3 种实现方案",
       "allowedTransitions": [
-        "planning",
+        "detail-expansion",
         "failed"
       ],
       "preconditions": [
@@ -27,6 +27,11 @@
           "action": "created"
         },
         {
+          "path": "specs/<date+feature>/requirements.json",
+          "action": "created",
+          "note": "从 spec.md 提取的结构化需求清单"
+        },
+        {
           "path": "specs/<date+feature>/progress.md",
           "action": "created"
         }
@@ -36,23 +41,64 @@
       ],
       "interactive": true,
       "autoTransition": false,
-      "nextOnSuccess": "等待用户确认 spec 后转 planning",
+      "nextOnSuccess": "等待用户确认 spec 后转 detail-expansion",
       "banner": "执行中：loom-brainstorming"
     },
-    "planning": {
+    "detail-expansion": {
       "step": 2,
-      "skill": "loom-writing-plans",
-      "command": "loom-write-plan",
-      "description": "按项目架构分层拆解 task",
+      "skill": "loom-detail-expansion",
+      "command": null,
+      "description": "按 15 固定维度展开 behavior 强制清单，补齐 test_plan 与 applicability",
       "allowedTransitions": [
-        "approved",
+        "planning",
         "failed"
       ],
       "preconditions": [
         {
           "type": "file",
-          "description": "spec.md 存在且用户已确认",
-          "check": "specs/<date+feature>/spec.md 存在"
+          "description": "spec.md 和 requirements.json 存在",
+          "check": "specs/<date+feature>/spec.md 与 specs/<date+feature>/requirements.json 存在"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "specs/<date+feature>/requirements.json",
+          "action": "modified",
+          "note": "每个 REQ 展开为 behavior 强制清单（15 维度），补齐 test_plan 与 applicability"
+        },
+        {
+          "path": "specs/<date+feature>/handoffs/detail-expansion.json",
+          "action": "created"
+        },
+        {
+          "path": "specs/<date+feature>/progress.md",
+          "action": "modified"
+        }
+      ],
+      "reads": [
+        "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        ".loom/rules/constitution.md"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "behavior 清单补齐且无 requires-clarification 残留后转 planning",
+      "banner": "执行中：loom-detail-expansion"
+    },
+    "planning": {
+      "step": 3,
+      "skill": "loom-writing-plans",
+      "command": "loom-write-plan",
+      "description": "按项目架构分层拆解 task",
+      "allowedTransitions": [
+        "analyze-artifacts",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "spec.md 和 requirements.json 存在且用户已确认",
+          "check": "specs/<date+feature>/spec.md 与 specs/<date+feature>/requirements.json 存在"
         }
       ],
       "outputs": [
@@ -67,18 +113,69 @@
           "note": "独立 task 文件目录，每个 task 一个文件（T1.md, T2.md, ...）"
         },
         {
+          "path": "specs/<date+feature>/traceability.json",
+          "action": "created",
+          "note": "REQ 到 task/test/evidence 的结构化追踪账本，planning 阶段先写入 task 映射"
+        },
+        {
           "path": "specs/<date+feature>/progress.md",
           "action": "modified"
         }
       ],
       "reads": [
         "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        "specs/<date+feature>/handoffs/detail-expansion.json",
         ".loom/rules/constitution.md"
       ],
       "interactive": true,
       "autoTransition": false,
-      "nextOnSuccess": "等待用户确认 plan 后转 approved",
+      "nextOnSuccess": "等待用户确认 plan 后转 analyze-artifacts",
       "banner": "执行中：loom-writing-plans"
+    },
+    "analyze-artifacts": {
+      "step": 4,
+      "skill": "loom-analyze-artifacts",
+      "command": null,
+      "description": "planning 后审批前跨产物一致性只读分析（15 项维度）",
+      "allowedTransitions": [
+        "approved",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "spec.md、requirements.json、plan.md、tasks 目录和 traceability.json 存在",
+          "check": "specs/<date+feature>/spec.md、specs/<date+feature>/requirements.json、specs/<date+feature>/plan.md、specs/<date+feature>/tasks/ 与 specs/<date+feature>/traceability.json 存在"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "specs/<date+feature>/artifact-analysis.json",
+          "action": "created",
+          "note": "由 artifact-analysis-pass validator 生成；不作为 advance 前置 output，blocker/error 阻断 approved gate"
+        },
+        {
+          "path": "specs/<date+feature>/handoffs/analyze-artifacts.json",
+          "action": "created"
+        },
+        {
+          "path": "specs/<date+feature>/progress.md",
+          "action": "modified"
+        }
+      ],
+      "reads": [
+        "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        "specs/<date+feature>/plan.md",
+        "specs/<date+feature>/tasks/",
+        "specs/<date+feature>/traceability.json",
+        ".loom/rules/constitution.md"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "artifact-analysis.json 无 blocker 后转 approved",
+      "banner": "执行中：loom-analyze-artifacts"
     },
     "approved": {
       "step": null,
@@ -86,30 +183,35 @@
       "command": null,
       "description": "用户已确认计划，等待执行（检查点状态）",
       "allowedTransitions": [
-        "executing",
+        "git-worktree",
         "failed"
       ],
       "preconditions": [
         {
           "type": "file",
-          "description": "plan.md 和 tasks 目录存在且用户已确认",
-          "check": "specs/<date+feature>/plan.md 存在且 specs/<date+feature>/tasks/ 目录存在"
+          "description": "plan.md、tasks 目录和 traceability.json 存在且用户已确认",
+          "check": "specs/<date+feature>/plan.md、specs/<date+feature>/tasks/ 与 specs/<date+feature>/traceability.json 存在"
         },
         {
           "type": "file",
-          "description": "spec.md 存在",
-          "check": "specs/<date+feature>/spec.md 存在"
+          "description": "spec.md 和 requirements.json 存在",
+          "check": "specs/<date+feature>/spec.md 与 specs/<date+feature>/requirements.json 存在"
+        },
+        {
+          "type": "file",
+          "description": "artifact-analysis.json 存在且无 blocker",
+          "check": "specs/<date+feature>/artifact-analysis.json 存在且结论为通过"
         }
       ],
       "outputs": [],
       "reads": [],
       "interactive": false,
       "autoTransition": false,
-      "nextOnSuccess": "用户触发 loom-execute-plan 后转 executing",
+      "nextOnSuccess": "用户触发执行后转 git-worktree",
       "banner": null
     },
     "git-worktree": {
-      "step": 3,
+      "step": 5,
       "skill": "loom-using-git-worktrees",
       "command": "loom-execute-plan",
       "description": "创建隔离分支",
@@ -120,13 +222,13 @@
       "preconditions": [
         {
           "type": "file",
-          "description": "plan.md 和 tasks 目录存在且用户已确认",
-          "check": "specs/<date+feature>/plan.md 存在且 specs/<date+feature>/tasks/ 目录存在"
+          "description": "plan.md、tasks 目录和 traceability.json 存在且用户已确认",
+          "check": "specs/<date+feature>/plan.md、specs/<date+feature>/tasks/ 与 specs/<date+feature>/traceability.json 存在"
         },
         {
           "type": "file",
-          "description": "spec.md 存在",
-          "check": "specs/<date+feature>/spec.md 存在"
+          "description": "spec.md 和 requirements.json 存在",
+          "check": "specs/<date+feature>/spec.md 与 specs/<date+feature>/requirements.json 存在"
         }
       ],
       "outputs": [
@@ -148,19 +250,19 @@
       "banner": "执行中：loom-using-git-worktrees"
     },
     "executing": {
-      "step": 4,
+      "step": 6,
       "skill": "loom-subagent-driven-development",
       "command": null,
       "description": "Subagent 编码执行（隔离派发 + 合并审查 + 增量修复）",
       "allowedTransitions": [
-        "verification",
+        "converge",
         "failed"
       ],
       "preconditions": [
         {
           "type": "file",
-          "description": "plan.md 和 tasks 目录存在",
-          "check": "specs/<date+feature>/plan.md 存在且 specs/<date+feature>/tasks/ 目录存在"
+          "description": "plan.md、tasks 目录和 traceability.json 存在",
+          "check": "specs/<date+feature>/plan.md、specs/<date+feature>/tasks/ 与 specs/<date+feature>/traceability.json 存在"
         },
         {
           "type": "git",
@@ -189,6 +291,11 @@
           "note": "包含集成测试、回归测试和Spec验证结果"
         },
         {
+          "path": "specs/<date+feature>/traceability.json",
+          "action": "modified",
+          "note": "补充每个 REQ 的 test/evidence 引用"
+        },
+        {
           "path": "specs/<date+feature>/progress.md",
           "action": "modified"
         }
@@ -197,12 +304,14 @@
         "specs/<date+feature>/plan.md",
         "specs/<date+feature>/tasks/",
         "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        "specs/<date+feature>/traceability.json",
         ".loom/contexts/subagent-context.md",
         ".loom/rules/constitution.md"
       ],
       "interactive": true,
       "autoTransition": false,
-      "nextOnSuccess": "所有 task 完成后转 verification",
+      "nextOnSuccess": "所有 task 完成后转 converge",
       "banner": "执行中：loom-subagent-driven-development",
       "subStates": {
         "implementer": {
@@ -234,13 +343,13 @@
         }
       }
     },
-    "verification": {
-      "step": 5,
-      "skill": "loom-verification-before-completion",
+    "converge": {
+      "step": 7,
+      "skill": "loom-converge",
       "command": null,
-      "description": "完成前验证（前置产出核验、编译验证、占位符扫描、类型一致性、最终一致性核验）",
+      "description": "对照意图清单分类覆盖度，missing/partial 回流 executing，内部可调用 omission-hunter",
       "allowedTransitions": [
-        "synced",
+        "verification",
         "executing",
         "failed"
       ],
@@ -249,6 +358,79 @@
           "type": "file",
           "description": "test-report.md 存在且结论为 PASS",
           "check": "specs/<date+feature>/test-report.md 存在且结论为 PASS"
+        },
+        {
+          "type": "file",
+          "description": "spec.md、requirements.json、plan.md、tasks 目录和 traceability.json 存在",
+          "check": "specs/<date+feature>/spec.md、specs/<date+feature>/requirements.json、specs/<date+feature>/plan.md、specs/<date+feature>/tasks/ 与 specs/<date+feature>/traceability.json 存在"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "specs/<date+feature>/convergence-report.json",
+          "action": "created",
+          "note": "由 convergence-pass validator 生成；不作为 advance 前置 output，blocker 回流 executing"
+        },
+        {
+          "path": "specs/<date+feature>/findings/",
+          "action": "created_optional",
+          "note": "omission-hunter 的对抗式审查结果（若触发）"
+        },
+        {
+          "path": "specs/<date+feature>/handoffs/converge.json",
+          "action": "created"
+        },
+        {
+          "path": "specs/<date+feature>/progress.md",
+          "action": "modified"
+        }
+      ],
+      "reads": [
+        "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        "specs/<date+feature>/plan.md",
+        "specs/<date+feature>/tasks/",
+        "specs/<date+feature>/traceability.json",
+        "specs/<date+feature>/test-report.md",
+        ".loom/rules/constitution.md",
+        "源码文件"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "convergence-report.json 无 blocker 后转 verification",
+      "banner": "执行中：loom-converge",
+      "retryOnFail": {
+        "target": "executing",
+        "condition": "missing/partial 生成新 task 回流 executing",
+        "fixMode": true,
+        "fixModeDescription": "增量修复模式：把 missing/partial/contradicts 生成新 task 回流 executing，修复后重新 converge（最多 3 轮）"
+      }
+    },
+    "verification": {
+      "step": 8,
+      "skill": "loom-verification-before-completion",
+      "command": null,
+      "description": "完成前验证（前置产出核验、编译验证、占位符扫描、类型一致性、最终一致性核验）",
+      "allowedTransitions": [
+        "code-review-request",
+        "executing",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "test-report.md 存在且结论为 PASS",
+          "check": "specs/<date+feature>/test-report.md 存在且结论为 PASS"
+        },
+        {
+          "type": "file",
+          "description": "requirements.json 与 traceability.json 存在并可校验",
+          "check": "specs/<date+feature>/requirements.json 与 specs/<date+feature>/traceability.json 存在且闭环"
+        },
+        {
+          "type": "file",
+          "description": "convergence-report.json 存在且无 blocker",
+          "check": "specs/<date+feature>/convergence-report.json 存在且状态为 converged"
         },
         {
           "type": "file",
@@ -272,16 +454,20 @@
       ],
       "reads": [
         "specs/<date+feature>/spec.md",
+        "specs/<date+feature>/requirements.json",
+        "specs/<date+feature>/traceability.json",
         "specs/<date+feature>/plan.md",
         "specs/<date+feature>/tasks/",
         "specs/<date+feature>/test-report.md",
+        "specs/<date+feature>/convergence-report.json",
+        "specs/<date+feature>/handoffs/converge.json",
         "combined-reviewer 报告",
         ".loom/rules/constitution.md",
         "源码文件"
       ],
       "interactive": true,
       "autoTransition": false,
-      "nextOnSuccess": "验证通过后转 synced",
+      "nextOnSuccess": "验证通过后转 code-review-request",
       "banner": "执行中：loom-verification-before-completion",
       "retryOnFail": {
         "target": "executing",
@@ -290,8 +476,117 @@
         "fixModeDescription": "增量修复模式：只派发 implementer（修复模式），传递修复指令 + subagent-context.md，不重新传递完整 task 上下文和 spec 全文"
       }
     },
+    "code-review-request": {
+      "step": 9,
+      "skill": "loom-requesting-code-review",
+      "command": null,
+      "description": "双轴预审查（Standards + Spec）后生成代码审查请求",
+      "allowedTransitions": [
+        "review-gate",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "verify-report.md 存在且验证通过",
+          "check": "specs/<date+feature>/verify-report.md 存在且结论为 PASS"
+        },
+        {
+          "type": "file",
+          "description": "spec.md 存在",
+          "check": "specs/<date+feature>/spec.md 存在"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "specs/<date+feature>/review-request.md",
+          "action": "created"
+        },
+        {
+          "path": "specs/<date+feature>/progress.md",
+          "action": "modified"
+        }
+      ],
+      "reads": [
+        "specs/<date+feature>/verify-report.md",
+        "specs/<date+feature>/spec.md",
+        "源码文件"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "审查请求生成后转 review-gate",
+      "banner": "执行中：loom-requesting-code-review"
+    },
+    "review-gate": {
+      "step": null,
+      "skill": null,
+      "command": null,
+      "description": "审查请求已发出，等待审查者反馈到达后继续",
+      "allowedTransitions": [
+        "code-review-response",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "review-request.md 存在",
+          "check": "specs/<date+feature>/review-request.md 存在"
+        },
+        {
+          "type": "file",
+          "description": "review-feedback.md 存在",
+          "check": "通过 review-gate 前 specs/<date+feature>/review-feedback.md 必须存在"
+        }
+      ],
+      "outputs": [],
+      "reads": [
+        "specs/<date+feature>/review-request.md",
+        "specs/<date+feature>/review-feedback.md"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "审查反馈到达并确认后转 code-review-response",
+      "banner": null
+    },
+    "code-review-response": {
+      "step": 10,
+      "skill": "loom-receiving-code-review",
+      "command": null,
+      "description": "处理审查反馈：修复 BLOCKER / 采纳或拒绝 SUGGESTION / 讨论沟通，修复后重跑测试",
+      "allowedTransitions": [
+        "synced",
+        "failed"
+      ],
+      "preconditions": [
+        {
+          "type": "file",
+          "description": "review-request.md 和 review-feedback.md 存在",
+          "check": "specs/<date+feature>/review-request.md 与 specs/<date+feature>/review-feedback.md 存在"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "specs/<date+feature>/review-response.md",
+          "action": "created"
+        },
+        {
+          "path": "specs/<date+feature>/progress.md",
+          "action": "modified"
+        }
+      ],
+      "reads": [
+        "specs/<date+feature>/review-request.md",
+        "specs/<date+feature>/review-feedback.md",
+        "审查反馈",
+        "源码文件"
+      ],
+      "interactive": true,
+      "autoTransition": false,
+      "nextOnSuccess": "审查反馈处理完成后转 synced",
+      "banner": "执行中：loom-receiving-code-review"
+    },
     "synced": {
-      "step": 6,
+      "step": 11,
       "skill": "loom-index-update",
       "command": null,
       "description": "codegraph 同步与结构化记忆更新，功能开发完成",
@@ -361,8 +656,11 @@
       "banner": null,
       "recovery": {
         "fromBrainstorming": "重新执行 loom-brainstorm",
+        "fromDetailExpansion": "重新执行 loom-detail-expansion，补齐 behavior 维度",
         "fromPlanning": "重新执行 loom-write-plan",
+        "fromAnalyzeArtifacts": "修复 artifact-analysis.json 的 blocker 后重新分析",
         "fromExecuting": "修复问题后重新执行 loom-execute-plan",
+        "fromConverge": "修复 missing/partial 后重新 converge，或回到 executing 修复",
         "fromVerification": "修复 BLOCKER 后重新验证"
       }
     }
@@ -370,9 +668,9 @@
   "transitions": [
     {
       "from": "brainstorming",
-      "to": "planning",
+      "to": "detail-expansion",
       "trigger": "user_confirms_spec",
-      "description": "用户确认 spec.md"
+      "description": "用户确认 spec.md，进入 behavior 维度展开"
     },
     {
       "from": "brainstorming",
@@ -381,16 +679,40 @@
       "description": "brainstorming 失败"
     },
     {
+      "from": "detail-expansion",
+      "to": "planning",
+      "trigger": "behaviors_expanded",
+      "description": "behavior 清单补齐且无 requires-clarification 残留，进入计划拆解"
+    },
+    {
+      "from": "detail-expansion",
+      "to": "failed",
+      "trigger": "error",
+      "description": "detail-expansion 失败或 requires-clarification 未解决"
+    },
+    {
       "from": "planning",
-      "to": "approved",
+      "to": "analyze-artifacts",
       "trigger": "user_confirms_plan",
-      "description": "用户确认 plan.md"
+      "description": "用户确认 plan.md，进入跨产物一致性分析"
     },
     {
       "from": "planning",
       "to": "failed",
       "trigger": "error",
       "description": "planning 失败"
+    },
+    {
+      "from": "analyze-artifacts",
+      "to": "approved",
+      "trigger": "analysis_pass",
+      "description": "artifact-analysis.json 无 blocker，进入审批门禁"
+    },
+    {
+      "from": "analyze-artifacts",
+      "to": "failed",
+      "trigger": "error",
+      "description": "analyze-artifacts 发现 blocker 或执行失败"
     },
     {
       "from": "approved",
@@ -418,15 +740,34 @@
     },
     {
       "from": "executing",
-      "to": "verification",
+      "to": "converge",
       "trigger": "all_tasks_done",
-      "description": "所有 task 完成，进入验证"
+      "description": "所有 task 完成，进入收敛检查"
     },
     {
       "from": "executing",
       "to": "failed",
       "trigger": "test_failure|blocker",
       "description": "测试失败或 BLOCKED 状态"
+    },
+    {
+      "from": "converge",
+      "to": "verification",
+      "trigger": "convergence_pass",
+      "description": "convergence-report.json 无 blocker，进入验证"
+    },
+    {
+      "from": "converge",
+      "to": "executing",
+      "trigger": "missing_or_partial_found",
+      "description": "missing/partial 生成新 task 回流 executing 修复（增量模式）",
+      "fixMode": true
+    },
+    {
+      "from": "converge",
+      "to": "failed",
+      "trigger": "critical_failure",
+      "description": "converge 发现 critical 偏差或超过 3 轮未收敛"
     },
     {
       "from": "verification",

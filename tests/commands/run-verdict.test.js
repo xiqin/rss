@@ -225,6 +225,10 @@ pipelines:
     `evidence-sha256: ${hash}`,
     ''
   ].join('\n');
+  writeFileSync(join(specDir, 'spec.md'), '# Spec\n\nNo structured REQ for this terminal completion fixture.\n', 'utf-8');
+  writeFileSync(join(specDir, 'plan.md'), '# Plan\n\nTerminal completion fixture.\n', 'utf-8');
+  writeFileSync(join(specDir, 'progress.md'), '# Progress\n\nVerification ready.\n', 'utf-8');
+  writeFileSync(join(specDir, 'test-report.md'), report, 'utf-8');
   writeFileSync(join(specDir, 'verify-report.md'), report, 'utf-8');
 
   const engine = new PipelineEngine(root, specDir);

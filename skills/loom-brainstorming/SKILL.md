@@ -64,11 +64,24 @@ user-invocable: true
 4. 等待用户反馈后再问下一个问题。
 5. 用户确认 shared understanding 前，不写最终 spec，不进入实现。
 
-### Step 5：输出 spec.md
+### Step 5：输出 spec.md 与 requirements.json
 
-用户确认方案后，写入 `specs/<date+feature>/spec.md`。文件夹命名格式：`<YYYY-MM-DD>+<功能名>`，如 `2026-04-26+user-management`。
+用户确认方案后，写入 `specs/<date+feature>/spec.md` 和 `specs/<date+feature>/requirements.json`。文件夹命名格式：`<YYYY-MM-DD>+<功能名>`，如 `2026-04-26+user-management`。
 
 使用 `assets/spec-template.md` 作为结构模板，并按项目类型删去不适用章节。
+
+`requirements.json` 必须与 `spec.md` 的所有 `REQ-xxx` 一一对应。每个 requirement 必须包含：
+
+- `id`：如 `REQ-001`。
+- `status`：初始为 `failing`。
+- `types`：需求类型，如 `functional`、`input`、`authorization`、`write`、`state`、`security`、`performance`、`observable`、`recovery`。
+- `required_categories`：该需求必须覆盖的行为维度，如 `happy-path`、`invalid-input`、`authorization`、`atomicity`、`state-transition`、`observability`。
+- `acceptance`：需求级验收标准。
+- `behaviors`：可独立验证的行为义务，ID 使用 `REQ-xxx-Bnn`，每条必须有 `category`、`description`、`status`、`acceptance`。
+
+行为维度必须从以下白名单选择：`happy-path`、`boundary`、`invalid-input`、`authorization`、`state-transition`、`idempotency`、`concurrency`、`atomicity`、`external-failure`、`compatibility`、`security`、`performance`、`observability`、`recovery`、`forbidden-behavior`。
+
+不得只生成默认 `functional` / `happy-path`。如果需求涉及输入、权限、写操作、状态变化、幂等、并发、外部依赖、安全、性能、可观测性或恢复，必须在 `types` / `required_categories` 和 `behaviors` 中显式体现。
 
 ### Step 6：Spec 自审
 
@@ -76,6 +89,7 @@ user-invocable: true
 - 一致性：架构、功能、接口、数据模型不能互相矛盾。
 - 范围：聚焦单个实现计划；过大时拆分。
 - 歧义：有两种解释时选定一种并写清楚。
+- 结构化需求：`spec.md` 的每个 `REQ-xxx` 必须出现在 `requirements.json`，每个 `required_categories` 必须有对应 behavior。
 
 ### Step 7：用户审查 Gate
 
@@ -90,13 +104,13 @@ user-invocable: true
   "stage": "brainstorming",
   "status": "done",
   "summary": "已确认的方案和关键取舍摘要",
-  "artifacts": ["spec.md"],
+  "artifacts": ["spec.md", "requirements.json"],
   "decisions": ["用户已选择的关键方案"],
   "open_questions": []
 }
 ```
 
-阶段结束后压缩 brainstorming 原始讨论、方案比较和搜索输出；下一阶段必须重新读取 `specs/<date+feature>/spec.md`、`specs/<date+feature>/progress.md`、`specs/<date+feature>/handoffs/brainstorming.json` 和必要规则文件，不依赖旧对话全文。
+阶段结束后压缩 brainstorming 原始讨论、方案比较和搜索输出；下一阶段必须重新读取 `specs/<date+feature>/spec.md`、`specs/<date+feature>/requirements.json`、`specs/<date+feature>/progress.md`、`specs/<date+feature>/handoffs/brainstorming.json` 和必要规则文件，不依赖旧对话全文。
 
 ## 约束
 
@@ -110,4 +124,4 @@ user-invocable: true
 
 ## 完成条件
 
-`specs/<date+feature>/spec.md` 保存、自审完成、用户批准，并完成 `specs/<date+feature>/handoffs/brainstorming.json`。
+`specs/<date+feature>/spec.md` 与 `specs/<date+feature>/requirements.json` 保存、自审完成、用户批准，并完成 `specs/<date+feature>/handoffs/brainstorming.json`。

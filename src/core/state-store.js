@@ -18,6 +18,17 @@ import { compareFingerprints, fingerprintDeclaredPaths } from './fingerprints.js
 export const TASK_STATUSES = ['pending', 'executing', 'reviewing', 'done', 'failed', 'blocked'];
 export const HANDOFF_STATUSES = ['done', 'partial', 'blocked', 'failed'];
 const TASK_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const MUTABLE_LEDGER_ARTIFACTS = new Set([
+  'traceability.json',
+  'artifact-analysis.json',
+  'convergence-report.json',
+  'findings'
+]);
+
+function isMutableLedgerArtifact(path) {
+  const normalized = String(path || '').replace(/\\/g, '/').replace(/\/$/, '');
+  return MUTABLE_LEDGER_ARTIFACTS.has(normalized) || normalized.startsWith('findings/');
+}
 
 // ── 工具函数 ───────────────────────────────────────────────────────────────
 
@@ -128,6 +139,20 @@ export class PipelineStateStore {
     state.dynamic_steps = steps;
     state.updated_at = now();
     writeJSON(this.statePath, state, this.fs);
+    return state;
+  }
+
+  updateMetadata(patch = {}) {
+    const state = this.read();
+    if (!state) return null;
+    state.metadata ||= {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete state.metadata[key];
+      else state.metadata[key] = value;
+    }
+    state.updated_at = now();
+    writeJSON(this.statePath, state, this.fs);
+    this._rebuildProgress();
     return state;
   }
 
@@ -280,6 +305,7 @@ export class PipelineStateStore {
     if (taskId === 'verification') basisPaths.push('test-report.md');
     const artifacts = Array.isArray(handoff.artifacts)
       ? handoff.artifacts.filter(path => !/^(?:handoffs|task-states)\/|^(?:progress\.md|pipeline\.state\.json)$/.test(path))
+        .filter(path => !isMutableLedgerArtifact(path))
       : [];
     const fingerprintOptions = { specDir: this.specDir, projectRoot: this.projectRoot, fs: this.fs };
 

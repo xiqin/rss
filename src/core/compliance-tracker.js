@@ -139,9 +139,12 @@ export class ComplianceTracker {
   _stageToSkill(stage) {
     const map = {
       brainstorming: 'loom-brainstorming',
+      'detail-expansion': 'loom-detail-expansion',
       planning: 'loom-writing-plans',
+      'analyze-artifacts': 'loom-analyze-artifacts',
       'git-worktree': 'loom-using-git-worktrees',
       executing: 'loom-subagent-driven-development',
+      converge: 'loom-converge',
       verification: 'loom-verification-before-completion',
       synced: 'loom-index-update'
     };

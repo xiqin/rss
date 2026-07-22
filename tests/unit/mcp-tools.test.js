@@ -10,7 +10,7 @@ function tmp() { return mkdtempSync(join(tmpdir(), 'loom-mcp-')); }
 
 describe('MCP tool definitions', () => {
   it('exposes the documented tools incl. context + capabilities', () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(17);
+    expect(TOOL_DEFINITIONS).toHaveLength(21);
     const names = TOOL_DEFINITIONS.map(t => t.name);
     expect(names).toContain('loom_attach_spec');
     expect(names).toContain('loom_get_context');
@@ -21,6 +21,10 @@ describe('MCP tool definitions', () => {
     expect(names).toContain('loom_adjust_pipeline');
     expect(names).toContain('loom_write_handoff');
     expect(names).toContain('loom_stage_checkpoint');
+    expect(names).toContain('loom_detail_expansion_check');
+    expect(names).toContain('loom_analyze_artifacts');
+    expect(names).toContain('loom_converge');
+    expect(names).toContain('loom_omission_hunt');
   });
 
   it('every tool carries a group tag for capability grouping', () => {
@@ -700,5 +704,109 @@ describe('loom_select_pipeline tool', () => {
       { project_root: root },
       store, 's1');
     expect(r.error).toMatch(/request is required/);
+  });
+});
+
+describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge / loom_omission_hunt tools', () => {
+  function setupSpecDir() {
+    const root = tmp();
+    const specDir = join(root, 'specs', 'feat');
+    mkdirSync(specDir, { recursive: true });
+    writeFileSync(join(specDir, 'spec.md'), '# Spec\n## REQ-001 Login\n');
+    writeFileSync(join(specDir, 'requirements.json'), JSON.stringify({
+      requirements: [{
+        id: 'REQ-001',
+        status: 'failing',
+        types: ['functional', 'input'],
+        required_categories: ['happy-path', 'invalid-input'],
+        acceptance: ['User can log in'],
+        behaviors: [
+          { id: 'REQ-001-B01', category: 'happy-path', description: 'valid login returns a token for accepted credentials', status: 'failing', acceptance: ['returns token'], test_plan: { strategy: 'unit', inputs: ['valid creds'], expected: ['token'], coverage_target: '100%' } },
+          { id: 'REQ-001-B02', category: 'invalid-input', description: 'invalid password is rejected with an authorization error', status: 'failing', acceptance: ['rejects'], test_plan: { strategy: 'unit', inputs: ['bad pw'], expected: ['401'], coverage_target: '100%' } },
+        ],
+      }],
+    }, null, 2));
+    mkdirSync(join(specDir, 'tasks'));
+    writeFileSync(join(specDir, 'tasks', 'T1.md'), '---\nowns: [src/auth.js]\nreads: []\ndepends_on: []\nrequirements: [REQ-001]\nbehavior_ids: [REQ-001-B01, REQ-001-B02]\ncomplexity: medium\n---\n# T1 Login\n');
+    writeFileSync(join(specDir, 'plan.md'), '# Plan\n- T1 Login: tasks/T1.md\n');
+    return { root, specDir };
+  }
+
+  it('detail_expansion_check passes when required categories + test_plan present', async () => {
+    const { root, specDir } = setupSpecDir();
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_detail_expansion_check', {}, store, 's1');
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+  });
+
+  it('analyze_artifacts passes when spec/requirements/plan/tasks/traceability are consistent', async () => {
+    const { root, specDir } = setupSpecDir();
+    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
+      requirements: {
+        'REQ-001': {
+          tasks: ['T1'],
+          tests: [],
+          evidence: [],
+          behaviors: {
+            'REQ-001-B01': { tasks: ['T1'], tests: [], evidence: [] },
+            'REQ-001-B02': { tasks: ['T1'], tests: [], evidence: [] },
+          },
+        },
+      },
+    }, null, 2));
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_analyze_artifacts', {}, store, 's1');
+    expect(r.ok).toBe(true);
+    expect(r.report.status).toBe('pass');
+    expect(existsSync(join(specDir, 'artifact-analysis.json'))).toBe(true);
+  });
+
+  it('converge reports needs_another_round when behavior tests/evidence missing', async () => {
+    const { root, specDir } = setupSpecDir();
+    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
+      requirements: {
+        'REQ-001': {
+          tasks: ['T1'],
+          tests: [],
+          evidence: [],
+          behaviors: {
+            'REQ-001-B01': { tasks: ['T1'], tests: [], evidence: [] },
+            'REQ-001-B02': { tasks: ['T1'], tests: [], evidence: [] },
+          },
+        },
+      },
+    }, null, 2));
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_converge', { round: 1 }, store, 's1');
+    expect(r.ok).toBe(false);
+    expect(r.report.status).toBe('needs_another_round');
+    expect(existsSync(join(specDir, 'convergence-report.json'))).toBe(true);
+  });
+
+  it('omission_hunt blocks when behavior test references missing files', async () => {
+    const { root, specDir } = setupSpecDir();
+    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
+      requirements: {
+        'REQ-001': {
+          tasks: ['T1'],
+          tests: [],
+          evidence: [],
+          behaviors: {
+            'REQ-001-B01': { tasks: ['T1'], tests: ['tests/missing.test.js'], evidence: [] },
+            'REQ-001-B02': { tasks: ['T1'], tests: [], evidence: [] },
+          },
+        },
+      },
+    }, null, 2));
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_omission_hunt', {}, store, 's1');
+    expect(r.ok).toBe(false);
+    expect(r.report.status).toBe('blocked');
+    expect(existsSync(join(specDir, 'findings', 'omission-hunter.json'))).toBe(true);
   });
 });

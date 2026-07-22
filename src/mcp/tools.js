@@ -19,6 +19,10 @@ import { loadContextIndex, DOC_KEYS } from '../core/context-index.js';
 import { SkillLoader } from '../core/skill-loader.js';
 import { PipelineSelector } from '../core/pipeline-selector.js';
 import { getSnapshot } from './telemetry.js';
+import { runDetailExpansionCheck } from '../../skills/loom-detail-expansion/scripts/check-detail-expansion.mjs';
+import { runAnalyzeArtifacts } from '../../skills/loom-analyze-artifacts/scripts/analyze-artifacts.mjs';
+import { runConverge } from '../../skills/loom-converge/scripts/converge.mjs';
+import { runOmissionHunt } from '../../skills/loom-omission-hunter/scripts/omission-hunt.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = join(__dirname, '..', '..', 'skills');
@@ -368,6 +372,51 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'loom_detail_expansion_check',
+    group: 'pipeline',
+    description: '检查 requirements.json 中每个 REQ 的 required_categories 都有对应 behavior、每个 behavior 有 test_plan、无 requires-clarification 残留。用于 detail-expansion 阶段（brainstorming 后 planning 前）校验行为维度是否完整展开。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' }
+      }
+    }
+  },
+  {
+    name: 'loom_analyze_artifacts',
+    group: 'pipeline',
+    description: '只读跨产物一致性分析（planning 后 approved 前）。检查 spec/requirements/plan/tasks/traceability 的重复、歧义、欠规格、behavior 缺失、task 未映射、依赖环、owns 冲突等，输出 artifact-analysis.json。blocker 阻断 approved gate。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' }
+      }
+    }
+  },
+  {
+    name: 'loom_converge',
+    group: 'pipeline',
+    description: '实现后对照意图清单（executing 后 verification 前）。把每个 behavior 分类为 covered/missing/partial/contradicts/unrequested，输出 convergence-report.json。missing/partial/contradicts 需回流 executing 生成新 task，直到 converged。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' },
+        round: { type: 'number', description: 'Convergence round number (default 1)' }
+      }
+    }
+  },
+  {
+    name: 'loom_omission_hunt',
+    group: 'pipeline',
+    description: '只读对抗式负空间审查（converge 中调用）。检查每个 behavior 的 tests/evidence 引用文件存在，对 forbidden-behavior/concurrency/atomicity/observability 类提示人工审查，输出 findings/omission-hunter.json。blocker 回流到 converge。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spec_dir: { type: 'string', description: 'Path to spec directory (optional if attached)' }
+      }
+    }
   }
 ];
 
@@ -540,6 +589,49 @@ const TOOL_SECURITY = {
       requiresUserConfirmation: false,
     },
   },
+  loom_detail_expansion_check: READ_ONLY,
+  loom_analyze_artifacts: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'low',
+      effects: ['read', 'file'],
+      writes: ['artifact-analysis.json'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_converge: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'medium',
+      effects: ['read', 'file'],
+      writes: ['convergence-report.json'],
+      requiresUserConfirmation: false,
+    },
+  },
+  loom_omission_hunt: {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    loom: {
+      risk: 'low',
+      effects: ['read', 'file'],
+      writes: ['findings/omission-hunter.json'],
+      requiresUserConfirmation: false,
+    },
+  },
 };
 
 for (const tool of TOOL_DEFINITIONS) {
@@ -559,7 +651,7 @@ export const CAPABILITY_GROUPS = {
   pipeline: {
     title: '流水线（状态机）',
     when: '推进开发流程、查当前阶段该做什么、推进/审批/更新任务状态时。强调"状态感知"：先读 pipeline context 了解现状，再决定动作。',
-    tools: ['loom_get_project_status', 'loom_get_pipeline_context', 'loom_select_pipeline', 'loom_advance_pipeline', 'loom_approve_gate', 'loom_update_task_state', 'loom_write_handoff', 'loom_stage_checkpoint', 'loom_adjust_pipeline'],
+    tools: ['loom_get_project_status', 'loom_get_pipeline_context', 'loom_select_pipeline', 'loom_advance_pipeline', 'loom_approve_gate', 'loom_update_task_state', 'loom_write_handoff', 'loom_stage_checkpoint', 'loom_adjust_pipeline', 'loom_detail_expansion_check', 'loom_analyze_artifacts', 'loom_converge', 'loom_omission_hunt'],
   },
   memory: {
     title: '结构化记忆',
@@ -1036,6 +1128,56 @@ export async function executeToolCall(toolName, args, sessionStore, sessionId, {
 
     case 'loom_telemetry': {
       return getSnapshot();
+    }
+
+    case 'loom_detail_expansion_check': {
+      if (!specDir) return { error: 'No spec_dir. Call loom_attach_spec first or pass spec_dir.' };
+      const abs = safeResolveSpecDir(projectRoot, specDir);
+      const r = runDetailExpansionCheck(abs);
+      return {
+        ok: r.ok,
+        errors: r.errors || [],
+        warnings: r.warnings || [],
+        stats: r.stats,
+        error: r.error || null,
+      };
+    }
+
+    case 'loom_analyze_artifacts': {
+      if (!specDir) return { error: 'No spec_dir. Call loom_attach_spec first or pass spec_dir.' };
+      const abs = safeResolveSpecDir(projectRoot, specDir);
+      const r = runAnalyzeArtifacts(abs);
+      return {
+        ok: r.ok,
+        error: r.error || null,
+        errors: r.errors || [],
+        report: r.report,
+      };
+    }
+
+    case 'loom_converge': {
+      if (!specDir) return { error: 'No spec_dir. Call loom_attach_spec first or pass spec_dir.' };
+      const abs = safeResolveSpecDir(projectRoot, specDir);
+      const round = positiveInt(args.round, 1);
+      const r = runConverge(abs, round);
+      return {
+        ok: r.ok,
+        error: r.error || null,
+        errors: r.errors || [],
+        report: r.report,
+      };
+    }
+
+    case 'loom_omission_hunt': {
+      if (!specDir) return { error: 'No spec_dir. Call loom_attach_spec first or pass spec_dir.' };
+      const abs = safeResolveSpecDir(projectRoot, specDir);
+      const r = runOmissionHunt(abs);
+      return {
+        ok: r.ok,
+        error: r.error || null,
+        errors: r.errors || [],
+        report: r.report,
+      };
     }
 
     default:

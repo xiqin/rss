@@ -225,15 +225,26 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 
 | Step | 阶段                        | 说明                                                      | 输出                                         |
 | ---- | --------------------------- | --------------------------------------------------------- | -------------------------------------------- |
-| 1    | brainstorming               | 需求头脑风暴，探索 2-3 种实现方案                         | `specs/<date+feature>/spec.md`               |
-| 2    | writing-plans               | 按分层拆解 task                                           | `specs/<date+feature>/plan.md`               |
+| 1    | brainstorming               | 需求头脑风暴，探索 2-3 种实现方案                         | `spec.md` + `requirements.json`              |
+| 2    | writing-plans               | 按分层拆解 task                                           | `plan.md` + `tasks/` + `traceability.json`   |
 | 3    | git-worktree                | 创建隔离分支                                              | feature 分支                                 |
-| 4    | subagent-driven-development | Subagent 隔离派发 + 双审查                                | 源码 + 测试报告                              |
-| 5    | verification                | 完成前验证，Spec覆盖/类型一致性/编译测试                  | 验证报告                                     |
+| 4    | subagent-driven-development | Subagent 隔离派发 + 双审查                                | 源码 + `test-report.md` + 更新后的 `traceability.json` |
+| 5    | verification                | 完成前验证，Spec覆盖/类型一致性/编译测试                  | `verify-report.md`                           |
 | 6    | code-review-request         | 双轴预审查（Standards + Spec），生成审查请求             | `review-request.md`                          |
 | 7    | review-gate                 | 人工 gate，等待审查者反馈                                 | —                                            |
 | 8    | code-review-response        | 处理审查反馈，修复 BLOCKER，push back 不合理建议          | `review-response.md`                         |
 | 9    | index-update                | codegraph 同步与结构化记忆更新（无 codegraph 时跳过索引） | codegraph 图索引 / `.loom/memory/store.json` |
+
+结构化账本可用独立脚本主动生成或检查：
+
+```bash
+npm run requirements:generate -- --spec-dir specs/feat
+npm run requirements:check -- --spec-dir specs/feat --required
+npm run traceability:generate -- --spec-dir specs/feat
+npm run traceability:check -- --spec-dir specs/feat --required
+```
+
+`requirements.json` 记录每个 `REQ-xxx` 的 `types`、`required_categories` 和 behavior；`traceability.json` 记录 `REQ -> behavior -> task/test/evidence` 闭环。
 
 ### 代码审查
 
@@ -253,16 +264,20 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 ## Skills（18 个）
 
 <!-- loom:generate:skills-catalog -->
-6 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 18 个
+8 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 22 个
 
 **核心流水线 Skills：**
 
 | Skill                               | 输出                           | 说明                                               |
 | ----------------------------------- | ------------------------------ | -------------------------------------------------- |
 | loom-brainstorming | `specs/<date+feature>/spec.md` | 需求头脑风暴, +可视化伴侣、设计自检、用户审查 Gate |
+| loom-detail-expansion | `specs/<date+feature>/requirements.json` | 按 15 维度展开 Behavior Obligation，补齐 test_plan 与 applicability |
 | loom-writing-plans | `specs/<date+feature>/plan.md` | 分层拆解 task, +模型选择、类型一致性检查 |
+| loom-analyze-artifacts | `specs/<date+feature>/artifact-analysis.json` | planning 后审批前跨产物一致性只读分析 |
 | loom-using-git-worktrees | feature 分支 | 创建隔离分支, +测试基线验证 |
 | loom-subagent-driven-development | 源码 + 测试报告 | Subagent 派发 + 双重审查,独立模板文件、4种状态处理 |
+| loom-converge | `specs/<date+feature>/convergence-report.json` | executing 后 verification 前对照意图清单，missing/partial 回流 executing |
+| loom-omission-hunter | `specs/<date+feature>/findings/omission-hunter.json` | 只读对抗式审查，负空间检查（应存在但不存在） |
 | loom-verification-before-completion | 验证报告 | 完成前验证, +Spec覆盖、类型一致性、编译测试 |
 | loom-index-update | codegraph 同步 + 结构化记忆 | codegraph 同步 |
 
@@ -295,6 +310,26 @@ AI 收到任务后会先判断类型并告知用户，必须等用户明确确�
 
 > 完整定义详见 `skills/loom-using-loom/SKILL.md` 或 `.loom/skills/` 目录
 <!-- /loom:generate:skills-catalog -->
+
+## 文档索引
+
+除本 README 外，`docs/` 目录提供以下文档：
+
+| 文档 | 说明 |
+| --- | --- |
+| `docs/pipeline-reliability-improvement-plan.md` | 流水线可靠性改进方案（P0/P1/P2 完整设计与落地清单） |
+| `docs/pipeline-validators.md` | 流水线声明式 validator 注册表、审批门禁、handoff 指纹、防漂移测试 |
+| `docs/traceability-ledger.md` | 结构化账本 `requirements.json` / `traceability.json` 字段、维度白名单、校验阶段、CLI |
+| `docs/skills-reference.md` | Skills 快速参考（触发、输出、下一步） |
+| `docs/architecture.md` | 目录结构、核心模块、数据流、Hook 系统、Schema 驱动、测试架构 |
+| `docs/system-design.md` | 系统设计、流程图、阶段语义 |
+| `docs/project-overview.md` | 项目总览与分层阅读路线 |
+| `docs/installation.md` | 安装、初始化、子命令用法 |
+| `docs/customization.md` | 项目级 / skill 级 / 流水线级自定义 |
+| `docs/generated-files.md` | 自动生成文件清单与生命周期 |
+| `docs/install-security.md` | 安装位置与写入规则 |
+| `docs/uninstall.md` | 卸载流程 |
+| `docs/naming.md` | 命名约定与内部术语 |
 
 ## License
 

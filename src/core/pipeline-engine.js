@@ -17,6 +17,12 @@ import { NodeFileSystem } from './fs-interface.js';
 import { PipelineStateStore } from './state-store.js';
 import { SpecLock } from './lock.js';
 import { ComplianceTracker } from './compliance-tracker.js';
+import { compareFingerprints, fingerprintDeclaredPaths } from './fingerprints.js';
+import { verifyArtifacts } from '../../skills/loom-verification-before-completion/scripts/verify-artifacts.mjs';
+import { runDetailExpansionCheck } from '../../skills/loom-detail-expansion/scripts/check-detail-expansion.mjs';
+import { runAnalyzeArtifacts } from '../../skills/loom-analyze-artifacts/scripts/analyze-artifacts.mjs';
+import { runConverge } from '../../skills/loom-converge/scripts/converge.mjs';
+import { validateTraceabilityFile } from './traceability.js';
 import {
   checkPreconditions, checkStageOutputs,
   isReportPassing,
@@ -34,18 +40,39 @@ const CONTEXT_PRESERVE = [
   'handoffs/'
 ];
 
+const APPROVAL_FINGERPRINT_EXCLUDES = new Set([
+  'traceability.json'
+]);
+
 const STAGE_RECOMMENDED_READS = {
   brainstorming: [
     '.loom/rules/product.md',
     '.loom/rules/constitution.md',
     'progress.md'
   ],
+  'detail-expansion': [
+    'spec.md',
+    'requirements.json',
+    'progress.md',
+    'handoffs/brainstorming.json'
+  ],
   planning: [
     'spec.md',
+    'requirements.json',
     'progress.md',
     'handoffs/brainstorming.json',
+    'handoffs/detail-expansion.json',
     '.loom/rules/constitution.md',
     '.loom/contexts/subagent-context.md'
+  ],
+  'analyze-artifacts': [
+    'spec.md',
+    'requirements.json',
+    'plan.md',
+    'tasks/',
+    'traceability.json',
+    'progress.md',
+    'handoffs/planning.json'
   ],
   'git-worktree': [
     'spec.md',
@@ -61,11 +88,23 @@ const STAGE_RECOMMENDED_READS = {
     'handoffs/planning.json',
     '.loom/contexts/subagent-context.md'
   ],
+  converge: [
+    'spec.md',
+    'requirements.json',
+    'plan.md',
+    'tasks/',
+    'traceability.json',
+    'test-report.md',
+    'progress.md',
+    'handoffs/executing.json'
+  ],
   verification: [
     'spec.md',
     'test-report.md',
+    'convergence-report.json',
     'progress.md',
     'handoffs/executing.json',
+    'handoffs/converge.json',
     '.loom/rules/constitution.md'
   ],
   synced: [
@@ -86,6 +125,255 @@ function summarizeHandoffs(handoffs) {
     artifacts: h.artifacts || h.outputs || h.files || h.changed_files || [],
     written_at: h.written_at || null
   }));
+}
+
+function taskIdFromFilename(filename) {
+  return filename.replace(/\.md$/i, '');
+}
+
+function listTaskIds(specDir, fs) {
+  const tasksDir = join(specDir, 'tasks');
+  if (!fs.existsSync(tasksDir)) return [];
+  return fs.readdirSync(tasksDir)
+    .filter(f => /^T\d+\.md$/i.test(f))
+    .map(taskIdFromFilename)
+    .sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')));
+}
+
+function extractRequirementIds(content) {
+  return [...new Set([...content.matchAll(/\bREQ-\d{3,}\b/g)].map(match => match[0]))];
+}
+
+function parseTaskRequirementIds(content) {
+  const frontmatter = content.match(/^---\s*\n([\s\S]*?)\n---/m)?.[1] || '';
+  const inline = frontmatter.match(/^requirements\s*:\s*\[([^\]]*)\]/m)?.[1];
+  if (inline) {
+    return inline
+      .split(',')
+      .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean);
+  }
+
+  const block = frontmatter.match(/^requirements\s*:\s*\n((?:\s*-\s*[^\n]+\n?)+)/m)?.[1];
+  if (!block) return [];
+  return block
+    .split('\n')
+    .map(line => line.match(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/)?.[1]?.trim())
+    .filter(Boolean);
+}
+
+function checkRequirementTaskClosure(specDir, fs) {
+  const specPath = join(specDir, 'spec.md');
+  if (!fs.existsSync(specPath)) return { ok: true };
+
+  const requirementIds = extractRequirementIds(fs.readFileSync(specPath, 'utf-8'));
+  if (requirementIds.length === 0) return { ok: true };
+
+  const tasksDir = join(specDir, 'tasks');
+  const mapped = new Set();
+  if (fs.existsSync(tasksDir)) {
+    for (const taskId of listTaskIds(specDir, fs)) {
+      const content = fs.readFileSync(join(tasksDir, `${taskId}.md`), 'utf-8');
+      for (const id of parseTaskRequirementIds(content)) mapped.add(id);
+    }
+  }
+
+  const unmapped = requirementIds.filter(id => !mapped.has(id));
+  return { ok: unmapped.length === 0, unmapped };
+}
+
+function checkTaskStateClosure(specDir, store, fs) {
+  const expected = listTaskIds(specDir, fs);
+  if (expected.length === 0) return { ok: true };
+
+  const states = store.readAllTasks();
+  const byId = new Map(states.map(t => [t.task_id, t]));
+  const expectedSet = new Set(expected);
+  const missing = expected.filter(id => !byId.has(id));
+  const notDone = expected
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .filter(t => t.status !== 'done')
+    .map(t => `${t.task_id}:${t.status || 'unknown'}`);
+  const extra = states
+    .filter(t => /^T\d+$/i.test(t.task_id || '') && !expectedSet.has(t.task_id))
+    .map(t => t.task_id);
+
+  return {
+    ok: missing.length === 0 && notDone.length === 0 && extra.length === 0,
+    missing,
+    notDone,
+    extra
+  };
+}
+
+function approvalArtifactPaths(currentStep, nextStep, specDir, fs) {
+  const candidates = [
+    ...(currentStep?.requires || []),
+    ...(currentStep?.approval_requires || []),
+    ...(currentStep?.outputs || []),
+    ...(nextStep?.requires || []),
+    'spec.md',
+    'requirements.json',
+    'plan.md',
+    'artifact-analysis.json',
+    'review-request.md',
+    'review-feedback.md',
+    'qa-cases.md',
+    'manual-checklist.md'
+  ];
+  return [...new Set(candidates)]
+    .filter(path => !APPROVAL_FINGERPRINT_EXCLUDES.has(path.replace(/\/$/, '')))
+    .filter(path => fs.existsSync(join(specDir, path.replace(/\/$/, ''))));
+}
+
+function checkApprovalRequirements(specDir, currentStep, fs) {
+  const approvalRequires = currentStep?.approval_requires || [];
+  if (approvalRequires.length === 0) return { ok: true };
+  return checkStageOutputs(specDir, approvalRequires, fs);
+}
+
+function parseVerdict(content) {
+  const match = content.match(/^\s*verdict\s*:\s*([^\r\n#]+)/im);
+  return match ? match[1].trim().toUpperCase() : null;
+}
+
+function checkReviewFeedbackApproval(specDir, currentStep, fs) {
+  if (!currentStep?.approval_requires?.includes('review-feedback.md')) return { ok: true };
+  const feedbackPath = join(specDir, 'review-feedback.md');
+  if (!fs.existsSync(feedbackPath)) return { ok: true };
+
+  const content = fs.readFileSync(feedbackPath, 'utf8');
+  const verdict = parseVerdict(content);
+  const blockers = content.match(/\b(BLOCKER|FAIL|FAILED|CHANGES_REQUESTED|CHANGE_REQUESTED|REQUEST_CHANGES|REJECTED)\b/gi) || [];
+  if (verdict === 'PASS' && blockers.length === 0) return { ok: true };
+
+  const reasons = [];
+  if (!verdict) reasons.push('missing verdict');
+  else if (verdict !== 'PASS') reasons.push(`verdict: ${verdict}`);
+  if (blockers.length > 0) reasons.push(`blocking markers: ${[...new Set(blockers.map(b => b.toUpperCase()))].join(', ')}`);
+  return { ok: false, verdict, blockers: [...new Set(blockers.map(b => b.toUpperCase()))], reasons };
+}
+
+function checkApprovalFreshness(state, specDir, projectRoot, fs) {
+  const stale = [];
+  for (const entry of state?.stage_history || []) {
+    if (!entry.approval_fingerprints) continue;
+    const changes = compareFingerprints(entry.approval_fingerprints, { specDir, projectRoot, fs });
+    if (changes.length > 0) stale.push({ stage: entry.stage, changes });
+  }
+  return { ok: stale.length === 0, stale };
+}
+
+const ADVANCE_VALIDATORS = {
+  'planning-artifacts': ({ specDir, stage }) => {
+    if (stage !== 'planning') return { ok: true };
+    const errors = [];
+    const result = validateTraceabilityFile(specDir, errors, { required: true, requireEvidence: false });
+    if (errors.length === 0) return { ok: true };
+    return {
+      ok: false,
+      error: `Stage "${stage}" planning artifact validation failed: ${errors.join('; ')}`,
+      hint: 'planning 阶段必须通过 traceability.json 的确定性校验，确保每个 REQ 和 behavior 都已映射到 task；tests/evidence 可在 executing 阶段补齐。'
+    };
+  },
+  'task-state-closure': ({ specDir, store, fs, stage }) => {
+    if (stage !== 'executing') return { ok: true };
+    const taskCheck = checkTaskStateClosure(specDir, store, fs);
+    if (taskCheck.ok) return { ok: true };
+    const details = [];
+    if (taskCheck.missing?.length) details.push(`missing task states: ${taskCheck.missing.join(', ')}`);
+    if (taskCheck.notDone?.length) details.push(`unfinished task states: ${taskCheck.notDone.join(', ')}`);
+    if (taskCheck.extra?.length) details.push(`unexpected task states: ${taskCheck.extra.join(', ')}`);
+    return {
+      ok: false,
+      error: `Stage "${stage}" task state closure failed: ${details.join('; ')}`,
+      hint: '每个 tasks/Tn.md 必须有对应 task-states/Tn.state.json，且 status 必须为 done；多余 task state 也需要清理或补齐 task 文件。'
+    };
+  },
+  'requirement-task-closure': ({ specDir, fs, stage }) => {
+    if (stage !== 'executing') return { ok: true };
+    const closure = checkRequirementTaskClosure(specDir, fs);
+    if (closure.ok) return { ok: true };
+    return {
+      ok: false,
+      error: `Stage "${stage}" requirement-task closure failed: unmapped requirements: ${closure.unmapped.join(', ')}`,
+      hint: 'spec.md 中每个 REQ-xxx 都必须出现在至少一个 tasks/Tn.md 的 frontmatter requirements 列表中。'
+    };
+  },
+  'verification-artifacts': ({ specDir, stage }) => {
+    if (stage !== 'verification') return { ok: true };
+    const verification = verifyArtifacts({ specDir });
+    if (verification.ok) return { ok: true };
+    return {
+      ok: false,
+      error: `Stage "${stage}" verification artifact validation failed: ${verification.errors.join('; ')}`,
+      warnings: verification.warnings,
+      hint: '执行完成前必须通过 loom-verification-before-completion 的确定性产物校验，确保测试报告、证据和 REQ 覆盖一致。'
+    };
+  },
+  'detail-expansion-pass': ({ specDir, stage }) => {
+    if (stage !== 'detail-expansion') return { ok: true };
+    const result = runDetailExpansionCheck(specDir);
+    if (result.ok) return { ok: true };
+    return {
+      ok: false,
+      error: `Stage "${stage}" detail-expansion check failed: ${(result.errors || []).join('; ')}`,
+      warnings: result.warnings || [],
+      hint: '每个 behavior 必须有非空 test_plan、非 placeholder 的 description、且 status 不为 requires-clarification；每个 REQ 的 required_categories 必须全部覆盖。'
+    };
+  },
+  'artifact-analysis-pass': ({ specDir, stage }) => {
+    if (stage !== 'analyze-artifacts') return { ok: true };
+    const result = runAnalyzeArtifacts(specDir);
+    if (result.ok) return { ok: true };
+    return {
+      ok: false,
+      error: `Stage "${stage}" artifact analysis failed: ${(result.errors || []).join('; ')}`,
+      hint: '跨产物一致性检查发现 blocker：spec/requirements/tasks/traceability 之间存在缺失、未映射或冲突。请按 findings 列表逐项修复后重新运行 analyze-artifacts。'
+    };
+  },
+  'convergence-pass': ({ specDir, stage, store }) => {
+    if (stage !== 'converge') return { ok: true };
+    const state = store?.read?.() || {};
+    const round = (state.metadata?.convergence_round || 0) + 1;
+    const result = runConverge(specDir, round);
+    if (result.ok) return { ok: true, clear_convergence_round: true };
+    if (round >= 3) {
+      return {
+        ok: false,
+        error: `Stage "${stage}" convergence check failed after ${round} rounds: ${(result.errors || []).join('; ')}`,
+        hint: 'converge 已达到最多 3 轮仍未收敛。请标记 failed，重新拆分任务或扩大修复范围。'
+      };
+    }
+    return {
+      ok: false,
+      retry_target: 'executing',
+      convergence_round: round,
+      error: `Stage "${stage}" convergence check failed: ${(result.errors || []).join('; ')}`,
+      hint: '意图清单收敛检查发现 blocker：存在 missing tests/evidence 的 behavior。请把 missing/partial 回流 executing 生成新 task，补齐后再重新运行 converge。'
+    };
+  }
+};
+
+function validatorIdsForStep(step, stage) {
+  const ids = [...(step?.validators || [])];
+  if (stage === 'executing') ids.push('task-state-closure', 'requirement-task-closure');
+  return [...new Set(ids)];
+}
+
+function runAdvanceValidators(context) {
+  const passed = { ok: true };
+  for (const id of validatorIdsForStep(context.step, context.stage)) {
+    const validator = ADVANCE_VALIDATORS[id];
+    if (!validator) {
+      return { ok: false, error: `Unknown validator "${id}"`, hint: '检查 workflow.yaml 中 validators 声明是否拼写正确，或先实现对应 validator。' };
+    }
+    const result = validator(context);
+    if (!result.ok) return { validator: id, ...result };
+    Object.assign(passed, result);
+  }
+  return passed;
 }
 
 // ── Workflow 解析 ──────────────────────────────────────────────────────────
@@ -277,6 +565,14 @@ export class PipelineEngine {
       return { ok: false, error: 'Pipeline is in failed state. Use: loom run --recover <stage>', hint: '执行 loom run --spec-dir <spec目录> --recover <阶段名> 从失败恢复' };
     }
 
+    const approvalFreshness = checkApprovalFreshness(state, this.specDir, this.projectRoot, this.fs);
+    if (!approvalFreshness.ok) {
+      const details = approvalFreshness.stale
+        .map(a => `${a.stage}: ${a.changes.map(c => `${c.path} ${c.reason}`).join(', ')}`)
+        .join('; ');
+      return { ok: false, error: `Stale approval detected: ${details}`, stale_approvals: approvalFreshness.stale, hint: '审批后关键产物已变化；请重新审查并通过对应人工 gate。' };
+    }
+
     const staleHandoffs = this.store.findStaleHandoffs();
     if (staleHandoffs.length > 0) {
       const details = staleHandoffs
@@ -306,6 +602,52 @@ export class PipelineEngine {
       if (!isReportPassing(this.specDir, currentStep.gate_verdict, this.fs, { requireEvidence: currentStep.evidence_required === true })) {
         return { ok: false, error: `${currentStep.gate_verdict} lacks a valid PASS verdict or evidence receipt.`, hint: `确认报告为 PASS；若本阶段要求证据，还需提供 evidence-command / exit-code / file / sha256，且日志哈希必须匹配。` };
       }
+    }
+
+    const validatorCheck = runAdvanceValidators({
+      stage: current,
+      step: currentStep,
+      specDir: this.specDir,
+      projectRoot: this.projectRoot,
+      store: this.store,
+      fs: this.fs
+    });
+    if (!validatorCheck.ok) {
+      if (validatorCheck.retry_target) {
+        if (this._requiresStageCompression(currentStep, current) && !compressionConfirmed) {
+          return {
+            ...validatorCheck,
+            compression_required: true,
+            required_action: 'compress_closed_stage_context',
+            hint: `${validatorCheck.hint} 已写入阶段 handoff 后，先压缩已结束阶段上下文，再以 compression_confirmed=true 回流到 ${validatorCheck.retry_target}。`
+          };
+        }
+        this.store.transition(validatorCheck.retry_target, {
+          history: {
+            retry_from: current,
+            validator: validatorCheck.validator,
+            reason: validatorCheck.error,
+            status: 'retry'
+          },
+          data: {
+            ...(validatorCheck.convergence_round ? { convergence_round: validatorCheck.convergence_round } : {})
+          }
+        });
+        return {
+          ok: true,
+          from: current,
+          to: validatorCheck.retry_target,
+          retry: true,
+          validator: validatorCheck.validator,
+          convergence_round: validatorCheck.convergence_round,
+          reason: validatorCheck.error
+        };
+      }
+      return validatorCheck;
+    }
+
+    if (validatorCheck.clear_convergence_round) {
+      this.store.updateMetadata({ convergence_round: undefined });
     }
 
     // 当前阶段产物完整后再判断是否有下一步，确保终止阶段也受 outputs/verdict 门禁约束。
@@ -356,7 +698,37 @@ export class PipelineEngine {
     const next = this.nextStep();
     if (!next) return { ok: false, error: 'No next step after gate', hint: '检查 workflow.yaml 中 gate 后的步骤配置' };
 
-    this.store.transition(next.id, { history: { approval: 'user_confirmed' } });
+    const steps = this.getSteps();
+    const currentStep = steps.find(s => s.id === state.current_stage);
+    const approvalCheck = checkApprovalRequirements(this.specDir, currentStep, this.fs);
+    if (!approvalCheck.ok) {
+      const reasons = [];
+      if (approvalCheck.missing.length > 0) reasons.push(`missing: ${approvalCheck.missing.join(', ')}`);
+      if (approvalCheck.withPlaceholders.length > 0) reasons.push(`placeholders in: ${approvalCheck.withPlaceholders.join(', ')}`);
+      return { ok: false, error: `Approval requirements for "${state.current_stage}" not met: ${reasons.join('; ')}`, hint: `通过该人工 gate 前必须补齐 approval_requires 产物且无占位符。缺失: ${approvalCheck.missing.join(', ')}，有占位符: ${approvalCheck.withPlaceholders.join(', ')}` };
+    }
+    const reviewFeedbackCheck = checkReviewFeedbackApproval(this.specDir, currentStep, this.fs);
+    if (!reviewFeedbackCheck.ok) {
+      return {
+        ok: false,
+        error: `Review feedback for "${state.current_stage}" is not approved: ${reviewFeedbackCheck.reasons.join('; ')}`,
+        hint: 'review-feedback.md 必须包含 verdict: PASS，且不能包含 BLOCKER、FAIL、CHANGES_REQUESTED 等阻断标记。'
+      };
+    }
+    const approvalArtifacts = approvalArtifactPaths(currentStep, next, this.specDir, this.fs);
+    const approvalFingerprints = fingerprintDeclaredPaths(approvalArtifacts, {
+      specDir: this.specDir,
+      projectRoot: this.projectRoot,
+      fs: this.fs
+    });
+
+    this.store.transition(next.id, {
+      history: {
+        approval: 'user_confirmed',
+        approval_fingerprints: approvalFingerprints,
+        approved_at: new Date().toISOString()
+      }
+    });
     return { ok: true, from: state.current_stage, to: next.id };
   }
 
@@ -467,9 +839,12 @@ export class PipelineEngine {
   _stageToSkill(stage) {
     const map = {
       brainstorming: 'loom-brainstorming',
+      'detail-expansion': 'loom-detail-expansion',
       planning: 'loom-writing-plans',
+      'analyze-artifacts': 'loom-analyze-artifacts',
       'git-worktree': 'loom-using-git-worktrees',
       executing: 'loom-subagent-driven-development',
+      converge: 'loom-converge',
       verification: 'loom-verification-before-completion',
       synced: 'loom-index-update'
     };

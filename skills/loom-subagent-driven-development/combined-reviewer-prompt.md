@@ -7,9 +7,10 @@
 1. **git diff**（仅变更部分）— **必须首先读取**
 2. 变更文件列表（从 diff 中提取）
 3. `specs/<date+feature>/tasks/TN.md`（当前 task 详细内容，仅在 diff 不够理解时读取）
-4. `.loom/contexts/subagent-context.md`（精简项目约束，仅在涉及架构合规时读取）
-5. `specs/<date+feature>/spec.md`（仅读取 diff 涉及的章节，不要全文读取）
-6. 图后端（仅在需要分析影响范围且图后端可用时，通过 `loom_graph_query` 查询）
+4. `specs/<date+feature>/requirements.json` 与 `traceability.json`（按当前 task 的 `behavior_ids` 定向读取）
+5. `.loom/contexts/subagent-context.md`（精简项目约束，仅在涉及架构合规时读取）
+6. `specs/<date+feature>/spec.md`（仅读取 diff 涉及的章节，不要全文读取）
+7. 图后端（仅在需要分析影响范围且图后端可用时，通过 `loom_graph_query` 查询）
 
 **默认不全量读取 spec.md、plan.md。只在 diff 触及相关领域时按需读取对应章节。若变更跨 5+ 文件或涉及架构级重构，允许全文读取相关文件。**
 
@@ -21,6 +22,8 @@ handoff 仅用于定位文件；接口和行为必须以当前源码、真实 di
 - git diff（仅变更部分）— 审查的主要输入
 - `specs/<date+feature>/spec.md`（按需读取相关章节）
 - `specs/<date+feature>/tasks/TN.md`（当前 task 详细内容）
+- `specs/<date+feature>/requirements.json`（当前 task 的 Requirement 与 behavior 定义）
+- `specs/<date+feature>/traceability.json`（当前 task 的 behavior 级 tests/evidence 映射）
 - `.loom/contexts/subagent-context.md`（精简项目约束）
 - 模块依赖和调用链：图后端可用时通过 `loom_graph_query` 实时查询（capability：`impact` / `callers` / `callees` / `symbolSearch`）；不可用时跳过图索引查询并用源码搜索补充判断。
 
@@ -34,6 +37,7 @@ handoff 仅用于定位文件；接口和行为必须以当前源码、真实 di
 4. 测试用例是否覆盖 spec 中的关键场景
 5. 单元测试文件是否已持久化到项目标准测试目录（非临时文件）
 6. task 中每个 Requirement ID 是否都有代码和测试落点；实际修改文件是否都落在 `owns` 内。缺失需求映射或未声明写入均为阻断。
+7. task frontmatter 中每个 `behavior_ids` 是否都有对应代码、持久化测试和 `traceability.json` behavior 级 `tests`/`evidence` 引用；只更新 REQ 级映射、不更新 behavior 级映射为阻断。
 
 ### SPEC 结果
 

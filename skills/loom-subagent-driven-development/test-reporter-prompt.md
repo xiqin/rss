@@ -9,6 +9,8 @@
 **按需获取上下文，避免全量读取：**
 
 - `specs/<date+feature>/spec.md`（仅读取与本次变更相关的接口章节，不要全文读取）
+- `specs/<date+feature>/requirements.json`（读取每个 REQ 的 behaviors 与 category）
+- `specs/<date+feature>/traceability.json`（读取并更新 behavior 级 tests/evidence 映射）
 - `specs/<date+feature>/plan.md`（仅读取 task 概览和依赖关系）
 - `specs/<date+feature>/tasks/` 目录下与本次变更相关的 task 文件（不要读取所有 task）
 - git diff（本次变更部分）— 确定哪些接口和模块受影响
@@ -26,6 +28,7 @@
 - 集成测试验证多个模块/组件之间的协作行为
 - 测试文件必须持久化到项目代码库的标准测试目录，不得作为临时验证后删除
 - 覆盖 spec 中定义的关键端到端流程
+- 覆盖 `requirements.json` 中每个 behavior，按 task `behavior_ids` 确认每个行为都有持久化测试
 - 使用项目已有的测试框架和约定
 
 ### 2. 运行全量回归测试
@@ -47,7 +50,7 @@
 
 ### 4. 输出测试报告
 
-保存到 `specs/<date+feature>/test-report.md`。
+保存到 `specs/<date+feature>/test-report.md`。同时更新 `specs/<date+feature>/traceability.json`：每个 REQ 与每个 `behavior_ids` 对应 behavior 都必须有真实 `tests` 与 `evidence` 引用。
 
 ## 测试报告格式
 
@@ -124,6 +127,13 @@ verdict: PASS
 ```
 
 只有 evidence 文件真实存在、哈希匹配且退出码为 0 时才能写 `verdict: PASS`。失败时写 `verdict: FAIL`。
+
+## Traceability 更新要求
+
+- `test-report.md` 中每个 PASS 的 REQ 与 behavior 必须能在 `traceability.json` 找到对应条目。
+- `traceability.json` 中每个 behavior 的 `tests` 必须指向真实持久化测试文件，可带 `#测试名` 或 `::测试名` 定位。
+- `traceability.json` 中每个 behavior 的 `evidence` 必须指向真实 evidence 文件，并与本报告的 `evidence-file` / `evidence-sha256` 一致。
+- 若任一 `behavior_ids` 缺少测试或 evidence，必须写 `verdict: FAIL`，不得用 REQ 级覆盖替代 behavior 级闭环。
 
 ## 修复指令输出（仅存在 FAIL 时必须输出）
 

@@ -58,8 +58,27 @@ describe('validatePipelineConsistency', () => {
 
   it('passes when all stage outputs exist', () => {
     writeFileSync(join(dir, 'spec.md'), '# Spec');
+    writeFileSync(join(dir, 'requirements.json'), '{ "requirements": [] }');
     const result = validatePipelineConsistency(dir, ['brainstorming']);
     expect(result.valid).toBe(true);
+  });
+
+  it('expects verify-report.md (not verification-report.md) for verification stage', () => {
+    writeFileSync(join(dir, 'spec.md'), '# Spec');
+    writeFileSync(join(dir, 'requirements.json'), '{ "requirements": [] }');
+    writeFileSync(join(dir, 'plan.md'), '# Plan');
+    writeFileSync(join(dir, 'traceability.json'), '{ "requirements": {} }');
+    writeFileSync(join(dir, 'test-report.md'), 'verdict: PASS');
+    writeFileSync(join(dir, 'verify-report.md'), 'verdict: PASS');
+    const result = validatePipelineConsistency(dir, ['brainstorming', 'planning', 'executing', 'verification']);
+    expect(result.valid).toBe(true);
+    expect(result.errors.some(e => e.includes('verification-report.md'))).toBe(false);
+  });
+
+  it('detects missing structured ledger artifacts for completed stages', () => {
+    const result = validatePipelineConsistency(dir, ['brainstorming']);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('requirements.json'))).toBe(true);
   });
 });
 

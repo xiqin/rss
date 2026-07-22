@@ -63,8 +63,10 @@ function loadPipelineSteps() {
 }
 
 const PIPELINE_SKILLS = [
-  'loom-brainstorming', 'loom-writing-plans', 'loom-using-git-worktrees',
-  'loom-subagent-driven-development', 'loom-verification-before-completion', 'loom-index-update'
+  'loom-brainstorming', 'loom-detail-expansion', 'loom-writing-plans',
+  'loom-analyze-artifacts', 'loom-using-git-worktrees',
+  'loom-subagent-driven-development', 'loom-converge', 'loom-omission-hunter',
+  'loom-verification-before-completion', 'loom-index-update'
 ];
 const AUX_SKILLS = ['loom-init-project', 'loom-router', 'loom-pipeline-selector', 'loom-using-loom'];
 const GENERAL_SKILLS = [
@@ -77,9 +79,13 @@ const QA_SKILLS = ['loom-qa'];
 
 const SKILL_DETAILS = {
   'loom-brainstorming': { output: '`specs/<date+feature>/spec.md`', note: '需求头脑风暴, +可视化伴侣、设计自检、用户审查 Gate' },
+  'loom-detail-expansion': { output: '`specs/<date+feature>/requirements.json`', note: '按 15 维度展开 Behavior Obligation，补齐 test_plan 与 applicability' },
   'loom-writing-plans': { output: '`specs/<date+feature>/plan.md`', note: '分层拆解 task, +模型选择、类型一致性检查' },
+  'loom-analyze-artifacts': { output: '`specs/<date+feature>/artifact-analysis.json`', note: 'planning 后审批前跨产物一致性只读分析' },
   'loom-using-git-worktrees': { output: 'feature 分支', note: '创建隔离分支, +测试基线验证' },
   'loom-subagent-driven-development': { output: '源码 + 测试报告', note: 'Subagent 派发 + 双重审查,独立模板文件、4种状态处理' },
+  'loom-converge': { output: '`specs/<date+feature>/convergence-report.json`', note: 'executing 后 verification 前对照意图清单，missing/partial 回流 executing' },
+  'loom-omission-hunter': { output: '`specs/<date+feature>/findings/omission-hunter.json`', note: '只读对抗式审查，负空间检查（应存在但不存在）' },
   'loom-verification-before-completion': { output: '验证报告', note: '完成前验证, +Spec覆盖、类型一致性、编译测试' },
   'loom-index-update': { output: 'codegraph 同步 + 结构化记忆', note: 'codegraph 同步' },
   'loom-init-project': { note: '项目初始化（扫描 + 生成宪章/记忆/入口）' },

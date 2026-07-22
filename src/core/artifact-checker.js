@@ -133,8 +133,9 @@ export function validateReportEvidence(specDir, content, fs = new NodeFileSystem
 export function inferStageFromArtifacts(specDir, fs = new NodeFileSystem()) {
   const has = (f) => fs.existsSync(join(specDir, f));
 
-  if (has('verify-report.md')) return 'synced';
-  if (has('test-report.md'))   return 'verification';
+  if (has('verify-report.md') && markdownReportPasses(specDir, 'verify-report.md', fs)) return 'synced';
+  if (has('convergence-report.json') && jsonStatusIn(specDir, 'convergence-report.json', ['converged'], fs)) return 'verification';
+  if (has('test-report.md'))   return 'converge';
 
   // task-states 目录存在且非空 → subagent 已开工 → executing
   const taskStatesDir = join(specDir, 'task-states');
@@ -146,9 +147,31 @@ export function inferStageFromArtifacts(specDir, fs = new NodeFileSystem()) {
     } catch {}
   }
 
-  if (has('plan.md'))   return 'approved';
-  if (has('spec.md'))   return 'planning';
+  if (has('artifact-analysis.json') && jsonStatusIn(specDir, 'artifact-analysis.json', ['pass'], fs)) return 'approved';
+  if (has('plan.md'))   return 'analyze-artifacts';
+  if (has('handoffs/detail-expansion.json')) return 'planning';
+  if (has('spec.md'))   return 'detail-expansion';
   return 'brainstorming';
+}
+
+function jsonStatusIn(specDir, file, allowed, fs) {
+  try {
+    const data = JSON.parse(fs.readFileSync(join(specDir, file), 'utf-8'));
+    return allowed.includes(String(data.status || '').toLowerCase()) && Number(data.blocker_count || 0) === 0;
+  } catch {
+    return false;
+  }
+}
+
+function markdownReportPasses(specDir, file, fs) {
+  try {
+    const content = fs.readFileSync(join(specDir, file), 'utf-8');
+    const verdict = parseVerdict(content);
+    if (verdict) return verdict === 'PASS';
+    return /\bPASS\b/i.test(content) && !/\b(FAIL|FAILED|BLOCKER|ERROR)\b/i.test(content);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -269,10 +292,10 @@ export function validateSkillOutput(specDir, skillName, fs = new NodeFileSystem(
 export function validatePipelineConsistency(specDir, completedStages, fs = new NodeFileSystem()) {
   const errors = [];
   const stageOutputs = {
-    'brainstorming': ['spec.md'],
-    'planning': ['plan.md'],
-    'executing': ['test-report.md'],
-    'verification': ['verification-report.md']
+    'brainstorming': ['spec.md', 'requirements.json'],
+    'planning': ['plan.md', 'traceability.json'],
+    'executing': ['test-report.md', 'traceability.json'],
+    'verification': ['verify-report.md', 'traceability.json']
   };
 
   for (const stage of completedStages) {

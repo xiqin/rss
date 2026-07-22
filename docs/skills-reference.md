@@ -30,6 +30,38 @@ description: loom 全部技能快速参考
 - **输出**：源码 + 测试报告
 - **下一步**：index-update
 
+### detail-expansion
+
+- **用途**：按 15 固定维度把 `REQ-xxx` 展开为可独立验证的 Behavior Obligation
+- **触发**：brainstorming 产出 `spec.md` 与 `requirements.json` 后，planning 前
+- **脚本**：`node skills/loom-detail-expansion/scripts/check-detail-expansion.mjs --spec-dir <dir>`
+- **输出**：更新后的 `requirements.json`，补齐每个 behavior 的 `category` / `test_plan` / `applicability`
+- **下一步**：writing-plans
+
+### analyze-artifacts
+
+- **用途**：planning 后 approved 前只读跨产物一致性分析
+- **触发**：planning 产出 `plan.md` / `tasks/` / `traceability.json` 后，等待用户审批前
+- **脚本**：`node skills/loom-analyze-artifacts/scripts/analyze-artifacts.mjs --spec-dir <dir>`
+- **输出**：`artifact-analysis.json`（含 findings 与 coverage%，blocker 阻断 approved gate）
+- **下一步**：blocker 阻断 approved gate，无 blocker 则进入 approved
+
+### converge
+
+- **用途**：executing 后 verification 前对照意图清单收敛
+- **触发**：executing 产出 `test-report.md` PASS，进入 verification 前
+- **脚本**：`node skills/loom-converge/scripts/converge.mjs --spec-dir <dir> --round <N>`
+- **输出**：`convergence-report.json`；missing / partial / contradicts 生成新 task 回流 executing，最多 3 轮
+- **下一步**：零 blocker 后进入 verification
+
+### omission-hunter
+
+- **用途**：只读对抗式审查，专门检查“应该存在但不存在”的实现与测试
+- **触发**：converge 内部调用，或独立运行于已实现代码
+- **脚本**：`node skills/loom-omission-hunter/scripts/omission-hunt.mjs --spec-dir <dir>`
+- **输出**：`findings/omission-hunter.json`（含 findings 与 blocker_count）
+- **下一步**：blocker 回流到 converge 生成新 task
+
 ### index-update
 
 - **用途**：codegraph 同步
@@ -126,6 +158,20 @@ skills/
     REFERENCE/        # 可选：参考文件
       *.md
 ```
+
+## 结构化账本与收据 CLI
+
+除各 skill 外，`scripts/` 提供 5 个独立 CLI 用于主动生成 / 校验结构化产物：
+
+| CLI | npm script | 用途 |
+| --- | --- | --- |
+| `scripts/requirements-json.mjs` | `requirements:generate` / `requirements:check` | 从 `spec.md` 生成 `requirements.json`；校验 REQ / behaviors / category / types 一致性 |
+| `scripts/traceability-json.mjs` | `traceability:generate` / `traceability:check` | 从 `requirements.json` + `tasks/` 生成 `traceability.json`；校验 REQ / behavior 到 task / test / evidence 闭环 |
+| `scripts/implementation-packets.mjs` | `packets:generate` / `packets:check` | 为单个 task 生成冻结的 `implementation-packets/T*.json`；校验 packet 是否 stale |
+
+4 个新 skill 各自带 `scripts/*.mjs`（详见各 skill 目录），可独立运行做只读分析。收据（`receipts/`）由 `src/core/receipts.js` 的 `buildReceipt` / `writeReceipt` 生成，绑定 `git_tree` / `git_commit` / `diff_sha256`。
+
+> `config/*.schema.json` 仅作为文档与测试 fixture 保留，skill 运行时不依赖；校验逻辑硬编码在各 skill 的 `scripts/*.mjs` 与 `src/core/*.js` 中。
 
 ## SKILL.md 格式
 

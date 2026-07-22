@@ -26,13 +26,13 @@ user-invocable: true
 
 此外仍需满足：
 
-- `specs/<date+feature>/plan.md` 和 `tasks/` 已存在。
+- `specs/<date+feature>/plan.md`、`requirements.json`、`traceability.json` 和 `tasks/` 已存在。
 - git worktree 已创建（或明确不需要隔离分支）。
 - 用户确认 plan 后进入执行阶段。
 
 ## 产物根目录
 
-本阶段的 `specDir` 是 `specs/<date+feature>/`。所有阶段产物都必须写入该目录内；禁止在项目根目录写 `test-report.md`、`progress.md`、`task-states/`、`handoffs/` 或复制 `plan.md`、`tasks/`。
+本阶段的 `specDir` 是 `specs/<date+feature>/`。所有阶段产物都必须写入该目录内；禁止在项目根目录写 `test-report.md`、`traceability.json`、`progress.md`、`task-states/`、`handoffs/` 或复制 `plan.md`、`tasks/`。
 
 ## 核心机制
 
@@ -92,9 +92,10 @@ loom tasks --spec-dir specs/<date+feature>
 下游 task 的 subagent **派发前必须读取上游 handoff 作为紧凑索引，并按 artifacts 定向核对当前源码**。handoff 不覆盖源码事实；自动保存的指纹过期时必须刷新 handoff。
 
 1. 读取 `specs/<date+feature>/plan.md` Task 概览和 `specs/<date+feature>/tasks/TN.md` 详细内容，创建任务追踪列表。
-2. 读取 `.loom/workflow.yaml` 的 `defaults`，获取 `max_retries` 和 `timeout_minutes`；当前 step 有 `config` 字段时以 step 级别为准。
-3. 读取 `.loom/contexts/subagent-context.md`，必要时读取 `specs/<date+feature>/spec.md` 相关章节。
-4. 对每个 task，执行以下循环（`retry_count` 初始为 0）：
+2. 读取 `specs/<date+feature>/requirements.json` 与 `specs/<date+feature>/traceability.json`，确认每个 task frontmatter 的 `behavior_ids` 已在账本中映射到该 task。
+3. 读取 `.loom/workflow.yaml` 的 `defaults`，获取 `max_retries` 和 `timeout_minutes`；当前 step 有 `config` 字段时以 step 级别为准。
+4. 读取 `.loom/contexts/subagent-context.md`，必要时读取 `specs/<date+feature>/spec.md` 相关章节。
+5. 对每个 task，执行以下循环（`retry_count` 初始为 0）：
 
    ```
    LOOP:
@@ -123,11 +124,41 @@ loom tasks --spec-dir specs/<date+feature>
          → 提取修复指令，派发 implementer（修复模式），回到 LOOP 顶部
    ```
 
-5. 所有 task PASS 后，派发 test-reporter。
-6. test-reporter 编写持久化集成测试、运行回归测试、对照 spec 验证并输出 `specs/<date+feature>/test-report.md`。
-7. test-reporter FAIL 时提取修复指令，派发 implementer（修复模式），再重跑 test-reporter。
+6. 每个 task PASS 后，更新 `specs/<date+feature>/traceability.json`：该 task 的每个 `behavior_ids` 都必须补齐真实持久化测试文件引用到 `tests`，并记录对应 evidence 引用到 `evidence`。
+7. 所有 task PASS 后，派发 test-reporter。
+8. test-reporter 编写持久化集成测试、运行回归测试、对照 spec/requirements/traceability 验证并输出 `specs/<date+feature>/test-report.md`，同时复核 `traceability.json` 中每个 behavior 的 `tests` 和 `evidence` 都指向真实文件。
+9. test-reporter FAIL 时提取修复指令，派发 implementer（修复模式），再重跑 test-reporter。
    - test-reporter 的修复重试同样受 `max_retries` 限制，超限触发熔断。
-8. 执行阶段整体完成后写入 `specs/<date+feature>/handoffs/executing.json`，摘要说明已完成 task、验证命令、关键产物和遗留风险。
+10. 执行阶段整体完成后写入 `specs/<date+feature>/handoffs/executing.json`，摘要说明已完成 task、验证命令、`traceability.json` 更新情况、关键产物和遗留风险。
+
+## traceability.json 执行闭环
+
+planning 阶段只负责把 `requirements.json` 中的 REQ 与 behaviors 映射到 task；executing 阶段必须把 behavior 级账本补到可验证闭环：
+
+```json
+{
+  "requirements": {
+    "REQ-001": {
+      "tasks": ["T1"],
+      "tests": ["tests/example.test.js"],
+      "evidence": ["evidence/test.log"],
+      "behaviors": {
+        "REQ-001-B01": {
+          "tasks": ["T1"],
+          "tests": ["tests/example.test.js#covers REQ-001-B01"],
+          "evidence": ["evidence/test.log"]
+        }
+      }
+    }
+  }
+}
+```
+
+- 每个 task 文件的 `behavior_ids` 必须逐项更新到 `traceability.json` 对应 behavior。
+- `tests` 必须引用持久化测试文件，可带 `#测试名` 或 `::测试名` 定位；不得引用临时文件或不存在路径。
+- `evidence` 必须引用 `specs/<date+feature>/evidence/` 下真实日志或 receipt，且与 `test-report.md` 的 evidence receipt 一致。
+- 不能只更新 REQ 级 `tasks/tests/evidence`，必须同步更新 behavior 级 `tasks/tests/evidence`。
+- 若某个 behavior 没有可写测试或证据，返回 BLOCKED 或 NEEDS_CONTEXT，禁止把 task 标记为 done。
 
 ## 熔断处理
 
@@ -165,6 +196,8 @@ loom tasks --spec-dir specs/<date+feature>
 首次实现模式传入：
 
 - `specs/<date+feature>/spec.md` 相关章节
+- `specs/<date+feature>/requirements.json` 中当前 task 的 Requirement 与 behavior 条目
+- `specs/<date+feature>/traceability.json` 中当前 task 的 REQ/behavior 映射
 - `specs/<date+feature>/tasks/TN.md`
 - `.loom/contexts/subagent-context.md`
 
@@ -172,7 +205,7 @@ loom tasks --spec-dir specs/<date+feature>
 
 - reviewer / test-reporter / verification 输出中的结构化修复指令
 - `.loom/contexts/subagent-context.md`
-- 原 task 的 Requirement ID 与对应验收标准（只传相关行，不传全文）
+- 原 task 的 Requirement ID、behavior_ids 与对应验收标准（只传相关行，不传全文）
 
 不要在修复模式重新传递完整 task 和 spec 全文。
 
@@ -183,6 +216,7 @@ loom tasks --spec-dir specs/<date+feature>
 - 禁止有未修复 BLOCKER 时进入下一个 task。
 - 禁止默认并行派发；需要并行时使用 `loom-dispatching-parallel-agents`。
 - 禁止把测试文件作为临时验证后删除。
+- 禁止在未补齐 `traceability.json` behavior 级 `tests` 与 `evidence` 时把 task 标记为 done。
 - 禁止在熔断后自动继续，必须等待用户指示。
 - 禁止对超时任务自动重试。
 
@@ -207,4 +241,4 @@ loom tasks --spec-dir specs/<date+feature>
 
 ## 完成条件
 
-全部 task、reviewer、test-reporter 通过，并完成 `specs/<date+feature>/handoffs/executing.json`。阶段结束后压缩原始派发记录、review 往返和长测试日志；下一阶段只依赖 `specs/<date+feature>/spec.md`、`specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/`、`specs/<date+feature>/test-report.md`、`specs/<date+feature>/progress.md` 和必要 handoff。
+全部 task、reviewer、test-reporter 通过，`traceability.json` 中每个 `behavior_ids` 对应 behavior 都有真实 `tests` 与 `evidence` 引用，并完成 `specs/<date+feature>/handoffs/executing.json`。阶段结束后压缩原始派发记录、review 往返和长测试日志；下一阶段只依赖 `specs/<date+feature>/spec.md`、`specs/<date+feature>/requirements.json`、`specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/`、`specs/<date+feature>/traceability.json`、`specs/<date+feature>/test-report.md`、`specs/<date+feature>/progress.md` 和必要 handoff。

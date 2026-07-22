@@ -14,6 +14,54 @@ function setupProject(yaml) {
   return root;
 }
 
+function writeStructuredSpec(specDir, { withCoverage = true } = {}) {
+  mkdirSync(join(specDir, 'tasks'), { recursive: true });
+  mkdirSync(join(specDir, 'tests'), { recursive: true });
+  mkdirSync(join(specDir, 'evidence'), { recursive: true });
+  writeFileSync(join(specDir, 'spec.md'), '# Spec\nREQ-001: behavior', 'utf-8');
+  writeFileSync(join(specDir, 'requirements.json'), JSON.stringify({
+    requirements: [{
+      id: 'REQ-001',
+      status: 'failing',
+      types: ['functional'],
+      required_categories: ['happy-path'],
+      acceptance: ['behavior'],
+      behaviors: [{
+        id: 'REQ-001-B01',
+        category: 'happy-path',
+        status: 'failing',
+        description: 'REQ-001 happy path is implemented and observable',
+        acceptance: ['covered'],
+        test_plan: { strategy: 'unit', inputs: ['x'], expected: ['y'] }
+      }]
+    }]
+  }, null, 2), 'utf-8');
+  writeFileSync(join(specDir, 'plan.md'), '# Plan\n\n| T1 | tasks/T1.md |\n', 'utf-8');
+  writeFileSync(join(specDir, 'tasks', 'T1.md'), `---
+requirements: [REQ-001]
+behavior_ids: [REQ-001-B01]
+---
+# Task 1`, 'utf-8');
+  writeFileSync(join(specDir, 'tests', 'example.test.js'), 'test passes', 'utf-8');
+  writeFileSync(join(specDir, 'evidence', 'example.log'), 'evidence passes', 'utf-8');
+  writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
+    requirements: {
+      'REQ-001': {
+        tasks: ['T1'],
+        tests: withCoverage ? ['tests/example.test.js'] : [],
+        evidence: withCoverage ? ['evidence/example.log'] : [],
+        behaviors: {
+          'REQ-001-B01': {
+            tasks: ['T1'],
+            tests: withCoverage ? ['tests/example.test.js'] : [],
+            evidence: withCoverage ? ['evidence/example.log'] : []
+          }
+        }
+      }
+    }
+  }, null, 2), 'utf-8');
+}
+
 const MINIMAL_WF = `
 defaults:
   pipeline_type: feature
@@ -329,6 +377,9 @@ selection_rules:
       ]
     });
 
+    writeFileSync(join(specDir, 'spec.md'), '# Spec', 'utf-8');
+    writeFileSync(join(specDir, 'plan.md'), '# Plan', 'utf-8');
+    writeFileSync(join(specDir, 'progress.md'), '# Progress', 'utf-8');
     writeFileSync(join(specDir, 'test-report.md'), 'PASS', 'utf-8');
     expect(eng.advance()).toMatchObject({ ok: true, to: 'verification' });
 
@@ -397,5 +448,83 @@ selection_rules:
       expect(eng.currentStage(), pipelineType).toBe('executing');
       expect(eng.advance({ compressionConfirmed: true }), pipelineType).toMatchObject({ ok: true, to: 'verification' });
     }
+  });
+
+  it('runs generated-report validators before downstream report preconditions', () => {
+    const root = setupProject(WF_WITH_CATALOG);
+    const specDir = join(root, 'specs', 'generated-report');
+    mkdirSync(specDir, { recursive: true });
+    writeStructuredSpec(specDir);
+    const eng = new PipelineEngine(root, specDir);
+    eng.initialize(null, {
+      dynamicSteps: [
+        { id: 'analyze-artifacts', skill: 'loom-analyze-artifacts', outputs: ['handoffs/analyze-artifacts.json'], validators: ['artifact-analysis-pass'] },
+        { id: 'approved', gate: 'human-approval', requires: ['artifact-analysis.json'] }
+      ]
+    });
+    eng.store.writeStageHandoff('analyze-artifacts', { status: 'done', summary: 'analyzed' });
+
+    expect(eng.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'approved' });
+    expect(JSON.parse(readFileSync(join(specDir, 'artifact-analysis.json'), 'utf-8'))).toMatchObject({ status: 'pass' });
+  });
+
+  it('routes failed convergence back to executing and tracks retry round', () => {
+    const root = setupProject(WF_WITH_CATALOG);
+    const specDir = join(root, 'specs', 'converge-retry');
+    mkdirSync(specDir, { recursive: true });
+    writeStructuredSpec(specDir, { withCoverage: false });
+    const eng = new PipelineEngine(root, specDir);
+    eng.initialize(null, {
+      dynamicSteps: [
+        { id: 'converge', skill: 'loom-converge', outputs: ['handoffs/converge.json'], validators: ['convergence-pass'] },
+        { id: 'verification', skill: 'loom-verification-before-completion', requires: ['convergence-report.json'] },
+        { id: 'executing', skill: 'loom-subagent-driven-development', outputs: [] }
+      ]
+    });
+    eng.store.writeStageHandoff('converge', { status: 'done', summary: 'converged' });
+
+    const retry = eng.advance({ compressionConfirmed: true });
+    expect(retry).toMatchObject({ ok: true, retry: true, to: 'executing', convergence_round: 1 });
+    expect(eng.currentStage()).toBe('executing');
+  });
+
+  it('clears convergence retry round after a successful convergence', () => {
+    const root = setupProject(WF_WITH_CATALOG);
+    const specDir = join(root, 'specs', 'converge-clear');
+    mkdirSync(specDir, { recursive: true });
+    writeStructuredSpec(specDir);
+    const eng = new PipelineEngine(root, specDir);
+    eng.initialize(null, {
+      dynamicSteps: [
+        { id: 'converge', skill: 'loom-converge', outputs: ['handoffs/converge.json'], validators: ['convergence-pass'] },
+        { id: 'verification', skill: 'loom-verification-before-completion', requires: ['convergence-report.json'] }
+      ]
+    });
+    eng.store.updateMetadata({ convergence_round: 2 });
+    eng.store.writeStageHandoff('converge', { status: 'done', summary: 'converged' });
+
+    expect(eng.advance({ compressionConfirmed: true })).toMatchObject({ ok: true, to: 'verification' });
+    expect(eng.store.read().metadata.convergence_round).toBeUndefined();
+  });
+
+  it('does not fingerprint validator-generated reports in handoffs', () => {
+    const root = setupProject(WF_WITH_CATALOG);
+    const specDir = join(root, 'specs', 'mutable-reports');
+    mkdirSync(specDir, { recursive: true });
+    writeStructuredSpec(specDir);
+    writeFileSync(join(specDir, 'artifact-analysis.json'), JSON.stringify({ status: 'pass', blocker_count: 0, created_at: 'before' }), 'utf-8');
+    const eng = new PipelineEngine(root, specDir);
+    eng.initialize('feature');
+
+    eng.store.writeStageHandoff('analyze-artifacts', {
+      status: 'done',
+      summary: 'analysis complete',
+      artifacts: ['artifact-analysis.json', 'convergence-report.json', 'findings/', 'findings/omission-hunter.json']
+    });
+    writeFileSync(join(specDir, 'artifact-analysis.json'), JSON.stringify({ status: 'pass', blocker_count: 0, created_at: 'after' }), 'utf-8');
+    mkdirSync(join(specDir, 'findings'), { recursive: true });
+    writeFileSync(join(specDir, 'findings', 'omission-hunter.json'), JSON.stringify({ created_at: 'after' }), 'utf-8');
+
+    expect(eng.store.findStaleHandoffs()).toEqual([]);
   });
 });

@@ -35,6 +35,7 @@ user-invocable: true
 - `keywords`：需求中的风险关键词（重构/跨模块/新功能/typo/依赖升级等）
 - `fileScope`：估计影响文件数（1/3/5/10）
 - `hasSpecExists`：specDir 是否已有 spec.md
+- `hasSpecAndReqs`：specDir 是否同时已有 spec.md 和 requirements.json
 - `hasRootCause`：是否提到"根因""已定位"
 - `inWorktree`：是否已在 git worktree 内
 
@@ -59,11 +60,28 @@ user-invocable: true
 
 ### Step 4：规则兜底
 
-按风险等级生成基础流程：
+按风险等级生成基础流程，并按增强/mandatory 信号追加结构化质量门：
 
 - **low**：executing → verification
 - **medium**：planning → approved → executing → verification → code-review-request → review-gate → code-review-response → synced
 - **high**：brainstorming（若 spec 不存在）→ planning → approved → git-worktree（若不在 worktree）→ executing → verification → code-review-request → review-gate → code-review-response → synced
+
+#### 增强模块与结构化 mandatory
+
+`_collectSignals` 额外采集 `optionalTriggers`（由 `_detectOptionalTriggers` 检测），命中即在基础流程的固定位置插入对应增强模块；若已有 `spec.md` + `requirements.json`，这些结构化质量门按 mandatory 语义自动补齐：
+
+| 增强模块            | 插入位置                          | 触发关键词信号                                                                 |
+| ------------------- | --------------------------------- | ------------------------------------------------------------------------------ |
+| detail-expansion    | brainstorming 后、planning 前     | 输入校验/权限/并发/原子性/安全/性能/可观测/幂等/兼容/恢复/边界/非法输入/状态迁移 |
+| analyze-artifacts   | planning 后、approved 前          | 跨模块/架构/重构/多文件协同/契约变更/接口变更                                  |
+| converge            | executing 后、verification 前     | 多任务/并行/跨模块/集成回归/需求覆盖/行为义务                                  |
+
+> `loom-omission-hunter` 不是独立 step，由 converge 在内部按需触发，不出现在主线的 `dynamic_steps` 中。
+
+追加规则：
+- 已有 `spec.md` + `requirements.json` 时，detail-expansion、analyze-artifacts、converge 必须出现在结构化流程中。
+- quickfix/chore 短路显式 `skip_closure`/`skip_gate`/`skip_mandatory`，保持 executing → verification 的轻量流程。
+- 同一分支可叠加多个增强模块，按上表固定位置各自插入。
 
 ### Step 5：校验与修正（`_validateAndFix`）
 
@@ -71,8 +89,9 @@ user-invocable: true
 
 - `must_include`：executing + verification 必须在列
 - `dependency_closure`：选 executing 但无 plan.md → 自动补 planning；选 planning 但无 spec.md → 自动补 brainstorming
-- `never_skip_gates`：planning 后必插 approved（low risk 除外）
-- `max_steps: 10`：超出报错
+- `never_skip_gates`：planning 后必插 approved（显式轻量 short-circuit 除外）
+- `mandatory`：executing、verification 不可省；已有 spec.md + requirements.json 的结构化流程不可省 detail-expansion、analyze-artifacts、converge
+- `max_steps: 13`：增强模块参与完整顺序校验；仅超限时按 `OPTIONAL_TRIM_ORDER = ['detail-expansion', 'analyze-artifacts', 'converge']`（converge 靠近验证关口，最后裁）裁剪可裁模块，仍超则报错
 
 ### Step 6：输出与确认门禁
 
@@ -126,15 +145,15 @@ user-invocable: true
 
 ## 约束
 
-- **不跳 mandatory step**：executing、verification 不可省
+- **不跳 mandatory step**：executing、verification 不可省；已有 spec.md + requirements.json 时 detail-expansion、analyze-artifacts、converge 不可省
 - **不跳 gate**：approved（human-approval）必须保留
 - **依赖闭包**：选 step 必须带 producer
-- **max_steps**：≤10
+- **max_steps**：≤13
 
 ## 失败处理
 
 - AI 调用失败 → 自动降级到规则兜底
-- 校验抛 `max_steps` 错 → 提示用户拆分需求
+- 校验抛 `max_steps` 错 → 先按 `OPTIONAL_TRIM_ORDER` 裁可裁增强模块，仍超则提示用户拆分需求
 - specDir 无写权限 → 仅返回 JSON，不初始化状态
 
 ## 参考

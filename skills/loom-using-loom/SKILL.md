@@ -29,9 +29,13 @@ loom 是一个 AI 工程化框架，把需求、规范、上下文、执行过�
 | Skill                               | 输出                           | 说明                                               |
 | ----------------------------------- | ------------------------------ | -------------------------------------------------- |
 | loom-brainstorming | `specs/<date+feature>/spec.md` | 需求头脑风暴, +可视化伴侣、设计自检、用户审查 Gate |
+| loom-detail-expansion | `specs/<date+feature>/requirements.json` | 按 15 维度展开 Behavior Obligation，补齐 test_plan 与 applicability |
 | loom-writing-plans | `specs/<date+feature>/plan.md` | 分层拆解 task, +模型选择、类型一致性检查 |
+| loom-analyze-artifacts | `specs/<date+feature>/artifact-analysis.json` | planning 后审批前跨产物一致性只读分析 |
 | loom-using-git-worktrees | feature 分支 | 创建隔离分支, +测试基线验证 |
 | loom-subagent-driven-development | 源码 + 测试报告 | Subagent 派发 + 双重审查,独立模板文件、4种状态处理 |
+| loom-converge | `specs/<date+feature>/convergence-report.json` | executing 后 verification 前对照意图清单，missing/partial 回流 executing |
+| loom-omission-hunter | `specs/<date+feature>/findings/omission-hunter.json` | 只读对抗式审查，负空间检查（应存在但不存在） |
 | loom-verification-before-completion | 验证报告 | 完成前验证, +Spec覆盖、类型一致性、编译测试 |
 | loom-index-update | codegraph 同步 + 结构化记忆 | codegraph 同步 |
 

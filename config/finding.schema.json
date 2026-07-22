@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/xiqin/loom/config/finding.schema.json",
+  "title": "loom Findings",
+  "description": "遗漏/冲突/不一致发现 schema — omission-hunter、analyze-artifacts、converge 共用输出格式。每个 finding 指向具体 artifact 与 requirement/behavior。",
+  "version": 1,
+  "type": "object",
+  "required": ["findings"],
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/finding" }
+    },
+    "summary": { "type": "object" }
+  },
+  "definitions": {
+    "finding": {
+      "type": "object",
+      "required": ["id", "kind", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["missing", "partial", "contradicts", "unrequested", "stale", "placeholder", "format"] },
+        "severity": { "type": "string", "enum": ["info", "warning", "error", "blocker"] },
+        "message": { "type": "string", "minLength": 1 },
+        "requirement_id": { "type": "string", "pattern": "^REQ-\\d{3,}$" },
+        "behavior_id": { "type": "string", "pattern": "^REQ-\\d{3,}-B\\d{2,}$" },
+        "task_id": { "type": "string", "pattern": "^T\\d+$" },
+        "artifact": { "type": "string" },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "line": { "type": "integer", "minimum": 1 },
+            "symbol": { "type": "string" }
+          }
+        },
+        "suggested_fix": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": { "type": "string", "enum": ["create_task", "update_task", "update_traceability", "update_requirement", "block_pipeline"] },
+            "details": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,6 +7,8 @@ depends_on: []  # 前置 task（必须在这些 task 完成后才能执行）
                 # 例: [T1, T2]
 requirements: [] # 本 task 覆盖的 spec Requirement ID；不得为空
                  # 例: [REQ-001, REQ-003]
+behavior_ids: [] # 本 task 覆盖的 requirements.json behavior ID；不得为空
+                 # 例: [REQ-001-B01, REQ-001-B02]
 complexity: medium  # low | medium | high（影响模型选择策略）
 ---
 
@@ -40,9 +42,15 @@ complexity: medium  # low | medium | high（影响模型选择策略）
 
 ## 验收映射
 
-| Requirement ID | 验收标准 | 代码位置 | 测试用例 |
-| -------------- | -------- | -------- | -------- |
-| REQ-001 | <从 spec 精确提取> | `<path>:<symbol>` | `<test name>` |
+| Requirement ID | Behavior ID | 验收标准 | 代码位置 | 测试用例 |
+| -------------- | ----------- | -------- | -------- | -------- |
+| REQ-001 | REQ-001-B01 | <从 requirements.json 精确提取> | `<path>:<symbol>` | `<test name>` |
+
+## Traceability 更新要求
+
+- planning 阶段：把本 task 的 `requirements` 和 `behavior_ids` 写入 `traceability.json` 的 `tasks` 字段。
+- executing 阶段：补齐对应 behavior 的 `tests` 和 `evidence` 引用。
+- 不允许只映射到 REQ 而遗漏 behavior 级映射。
 
 ## TDD 步骤
 

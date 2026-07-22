@@ -44,11 +44,12 @@
 **首次实现模式**：
 
 1. 严格按 task 中的实现步骤编写代码
-2. 只实现 task frontmatter 中列出的 Requirement ID；逐项核对“验收映射”。若缺失映射，返回 NEEDS_CONTEXT。
+2. 只实现 task frontmatter 中列出的 Requirement ID 与 `behavior_ids`；逐项核对“验收映射”。若缺失映射，返回 NEEDS_CONTEXT。
 3. 编写对应的单元测试文件，必须持久化到项目代码库的标准测试目录（如 `tests/`、`__tests__/`、`src/**/__tests__/` 等项目约定目录），不得作为临时验证后删除
 4. 根据上方项目约束中的构建和测试命令执行；命令为 UNKNOWN 时先检查项目配置，不得猜测
 5. 遵循项目编码红线（从 subagent-context.md 中读取）
 6. 遵循项目架构分层（从 subagent-context.md 中读取），不跨层写逻辑
+7. 更新 `specs/<date+feature>/traceability.json`：当前 task 的每个 `behavior_ids` 必须补齐 behavior 级 `tests` 与 `evidence` 引用；测试引用必须是持久化测试文件，evidence 引用必须是真实日志或 receipt
 
 **修复模式**：
 
@@ -56,6 +57,7 @@
 2. 不引入修复指令范围外的新功能或新代码
 3. 如果修复过程中发现其他问题，报告中注明但不擅自修复（超出修复范围）
 4. 修复后运行相关测试确认修复有效
+5. 若修复改变了测试或证据路径，同步更新 `traceability.json` 中受影响 `behavior_ids` 的 `tests` 与 `evidence`
 
 ## 代码风格
 
@@ -76,6 +78,7 @@
 - 测试使用真实代码，仅在不可避免时使用 mock
 - 每个测试只验证一个行为
 - 单元测试代码必须持久化到项目代码库的标准测试目录，不得作为临时验证后删除
+- 每个 `behavior_ids` 至少对应一个持久化测试引用，并写入 `traceability.json` 的 behavior 级 `tests`
 
 **修复模式**：
 
@@ -109,7 +112,8 @@
 1. 列出所有创建/修改的文件路径
 2. 不在消息中重复完整代码；代码以工作区文件为准，只报告符号名和关键变更，减少 token 与副本漂移
 3. 说明每个文件的作用和与 Requirement ID 的对应关系
-4. **生成 handoff 文件** `specs/<date+feature>/handoffs/<task-id>.json`，格式：
+4. 说明每个 `behavior_ids` 对应的测试文件与 evidence 文件，并确认已写入 `traceability.json`
+5. **生成 handoff 文件** `specs/<date+feature>/handoffs/<task-id>.json`，格式：
    ```json
    {
      "task_id": "TN",
@@ -123,9 +127,11 @@
          "signature": "<签名>"
        }
      ],
-     "breaking_changes": [],
-     "requirements_verified": ["REQ-001"],
-     "notes": "<需要告知下游 task 的关键信息>"
+      "breaking_changes": [],
+      "requirements_verified": ["REQ-001"],
+      "behaviors_verified": ["REQ-001-B01"],
+      "traceability_updated": true,
+      "notes": "<需要告知下游 task 的关键信息>"
    }
    ```
    `status` 只能使用 `done`、`partial`、`blocked`、`failed`。
@@ -135,6 +141,7 @@
 1. 列出修改的文件路径
 2. 只附上修改部分的完整代码（未修改的函数/类不需要重复输出）
 3. 说明每个修改解决了修复指令中的哪一条问题
+4. 若更新了测试或 evidence，说明对应 `behavior_ids` 与 `traceability.json` 更新结果
 
 ## 进度报告
 

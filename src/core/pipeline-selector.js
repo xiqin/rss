@@ -24,11 +24,31 @@ const RISK_KEYWORDS = {
 const ROOT_CAUSE_RE = /根因|root\s*cause|已定位|定位到|根因明确/i;
 
 const STEP_ORDER = [
-  'brainstorming', 'planning', 'approved', 'git-worktree',
-  'executing', 'verification',
+  'brainstorming', 'detail-expansion',
+  'planning', 'analyze-artifacts', 'approved', 'git-worktree',
+  'executing', 'converge', 'verification',
   'code-review-request', 'review-gate', 'code-review-response',
   'synced'
 ];
+
+// 增强模块的触发关键词信号（来自 AGENTS.md + step_catalog.skip_when 的反向）
+// 注：omission-hunter 由 converge 内部触发，不作为独立 step 出现在主线，此处不列。
+const OPTIONAL_SIGNALS = {
+  'detail-expansion': [
+    '输入', '权限', '鉴权', '授权', '写操作', '状态', '并发', '原子',
+    '外部依赖', '安全', '性能', '可观测', '恢复', '兼容', '幂等',
+    'input', 'permission', 'auth', 'concurrency', 'security', 'performance',
+    'observability', 'idempotent'
+  ],
+  'analyze-artifacts': [
+    '跨模块', '多模块', '跨服务', '架构', '重构',
+    'cross-module', 'architecture', 'refactor'
+  ],
+  'converge': [
+    '多任务', '多 task', '并行', '跨模块', '多模块',
+    'multi-task', 'parallel', 'cross-module'
+  ]
+};
 
 export class PipelineSelector {
   constructor(projectRoot, specDir = null, { fs, aiClient } = {}) {
@@ -62,7 +82,11 @@ export class PipelineSelector {
 
     const sc = this._matchShortCircuit(signals);
     if (sc) {
-      const steps = this._validateAndFix(sc.steps, signals, { skipClosure: true, skipGate: true });
+      const steps = this._validateAndFix(sc.steps, signals, {
+        skipClosure: sc.skip_closure === true,
+        skipGate: sc.skip_gate === true,
+        skipMandatory: sc.skip_mandatory === true
+      });
       return {
         steps,
         source: `short-circuit:${sc.name}`,
@@ -112,9 +136,19 @@ export class PipelineSelector {
       moduleCount: 0,
       hasTestsImpact: /test|测试/.test(text),
       hasSpecExists: this._specExists(),
+      hasSpecAndReqs: this._specAndReqsExist(),
       hasRootCause: ROOT_CAUSE_RE.test(text),
-      inWorktree: this._isInWorktree()
+      inWorktree: this._isInWorktree(),
+      optionalTriggers: this._detectOptionalTriggers(text)
     };
+  }
+
+  _detectOptionalTriggers(text) {
+    const triggers = {};
+    for (const [step, kws] of Object.entries(OPTIONAL_SIGNALS)) {
+      triggers[step] = kws.some(kw => text.includes(kw.toLowerCase()));
+    }
+    return triggers;
   }
 
   _extractKeywords(text) {
@@ -134,14 +168,25 @@ export class PipelineSelector {
     return this.fs.existsSync(join(this.specDir, 'spec.md'));
   }
 
+  _specAndReqsExist() {
+    if (!this.specDir) return false;
+    return this.fs.existsSync(join(this.specDir, 'spec.md')) &&
+           this.fs.existsSync(join(this.specDir, 'requirements.json'));
+  }
+
   _isInWorktree() {
     try {
-      const out = execSync('git rev-parse --is-inside-work-tree', {
+      const gitDir = execSync('git rev-parse --git-dir', {
         cwd: this.projectRoot,
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'ignore']
       }).trim();
-      return out === 'true';
+      const commonDir = execSync('git rev-parse --git-common-dir', {
+        cwd: this.projectRoot,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'ignore']
+      }).trim();
+      return resolve(this.projectRoot, gitDir) !== resolve(this.projectRoot, commonDir);
     } catch {
       return false;
     }
@@ -189,6 +234,7 @@ export class PipelineSelector {
 
   _ruleBasedFallback(signals) {
     const risk = this._assessRisk(signals);
+    const triggers = signals.optionalTriggers || {};
 
     if (risk === 'low') {
       return {
@@ -200,25 +246,74 @@ export class PipelineSelector {
     }
 
     if (risk === 'medium') {
+      const steps = this._buildMediumFallback(triggers, signals);
       return {
         name: 'medium-risk',
-        steps: ['planning', 'approved', 'executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced'],
-        reasoning: '中等风险，需规划 + 审批 + 验证 + 对抗审查 + 同步',
+        steps,
+        reasoning: '中等风险，需规划 + 审批 + 验证 + 对抗审查 + 同步' +
+          this._optionalReasoning(triggers),
         risk
       };
     }
 
-    const steps = [];
-    if (!signals.hasSpecExists) steps.push('brainstorming');
-    steps.push('planning', 'approved');
-    if (!signals.inWorktree) steps.push('git-worktree');
-    steps.push('executing', 'verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced');
+    const steps = this._buildHighFallback(signals, triggers);
     return {
       name: 'high-risk',
       steps,
-      reasoning: '高风险，完整流程 + 隔离分支 + 对抗审查',
+      reasoning: '高风险，完整流程 + 隔离分支 + 对抗审查' +
+        this._optionalReasoning(triggers),
       risk
     };
+  }
+
+  _buildMediumFallback(triggers, signals) {
+    const steps = ['planning'];
+    // mandatory 步骤：有 spec.md + requirements.json 时无条件追加（不再靠 triggers）
+    if (signals?.hasSpecAndReqs) {
+      steps.splice(steps.indexOf('planning'), 0, 'detail-expansion');
+      steps.push('analyze-artifacts');
+    } else if (triggers['analyze-artifacts']) {
+      steps.push('analyze-artifacts');
+    }
+    steps.push('approved', 'executing');
+    // converge：有 spec/requirements.json 时 mandatory，否则按 triggers
+    if (signals?.hasSpecAndReqs || triggers['converge']) {
+      steps.push('converge');
+    }
+    steps.push('verification');
+    steps.push('code-review-request', 'review-gate', 'code-review-response', 'synced');
+    return steps;
+  }
+
+  _buildHighFallback(signals, triggers) {
+    const steps = [];
+    if (!signals.hasSpecExists) {
+      steps.push('brainstorming');
+    }
+    // detail-expansion：有 spec.md + requirements.json 时 mandatory
+    if (signals.hasSpecAndReqs || triggers['detail-expansion']) {
+      steps.push('detail-expansion');
+    }
+    steps.push('planning');
+    // analyze-artifacts：有 spec/requirements.json 时 mandatory，否则按 triggers
+    if (signals.hasSpecAndReqs || triggers['analyze-artifacts']) {
+      steps.push('analyze-artifacts');
+    }
+    steps.push('approved');
+    if (!signals.inWorktree) steps.push('git-worktree');
+    steps.push('executing');
+    // converge：有 spec/requirements.json 时 mandatory，否则按 triggers
+    if (signals.hasSpecAndReqs || triggers['converge']) {
+      steps.push('converge');
+    }
+    steps.push('verification', 'code-review-request', 'review-gate', 'code-review-response', 'synced');
+    return steps;
+  }
+
+  _optionalReasoning(triggers) {
+    const hit = Object.entries(triggers).filter(([, v]) => v).map(([k]) => k);
+    if (!hit.length) return '';
+    return `；按信号追加 optional: ${hit.join(', ')}`;
   }
 
   // ── AI fallback（可选注入 aiClient）─────────────────────
@@ -299,18 +394,7 @@ export class PipelineSelector {
       if (m) ids.push(m[1]);
     }
 
-    return ids.map(id => {
-      const def = catalog[id] || {};
-      return {
-        id,
-        skill: def.skill ?? null,
-        requires: def.requires || [],
-        outputs: def.outputs || [],
-        gate: def.gate ?? (id === 'approved' ? 'human-approval' : undefined),
-        gate_verdict: def.gate_verdict,
-        description: def.description || ''
-      };
-    });
+    return this._validateAndFix(ids, this._collectSignals(''));
   }
 
   _extractSection(content, heading) {
@@ -337,6 +421,7 @@ export class PipelineSelector {
     lines.push(`- 关键词: ${(s.keywords || []).join(', ') || '(无)'}`);
     lines.push(`- 影响文件: ${s.fileScope ?? 'unknown'}`);
     lines.push(`- 已有 spec.md: ${s.hasSpecExists ? '是' : '否'}`);
+    lines.push(`- 已有 spec.md + requirements.json: ${s.hasSpecAndReqs ? '是' : '否'}`);
     lines.push(`- 已在 worktree: ${s.inWorktree ? '是' : '否'}`);
     lines.push(`- 根因明确: ${s.hasRootCause ? '是' : '否'}`);
     lines.push('');
@@ -367,7 +452,7 @@ export class PipelineSelector {
 
   // ── 校验与修正 ───────────────────────────────────────────
 
-  _validateAndFix(stepIds, signals, { skipClosure = false, skipGate = false } = {}) {
+  _validateAndFix(stepIds, signals, { skipClosure = false, skipGate = false, skipMandatory = false } = {}) {
     const catalog = this.workflow?.step_catalog;
     if (!catalog) {
       return stepIds.map(id => ({ id }));
@@ -383,6 +468,10 @@ export class PipelineSelector {
       if (!ids.includes(m)) ids.push(m);
     }
 
+    if (!skipMandatory) {
+      ids = this._ensureMandatorySteps(ids, signals, catalog);
+    }
+
     if (!skipClosure) {
       ids = this._ensureDependencyClosure(ids, signals);
     }
@@ -391,22 +480,65 @@ export class PipelineSelector {
     }
     ids = this._sortSteps(ids);
 
-    if (ids.length > maxSteps) {
-      throw new Error(`Selected steps exceed max_steps (${maxSteps}): ${ids.length} [${ids.join(',')}]`);
+    // optional 模块（catalog 标注 optional: true）不计入 max_steps。
+    // mandatory 步骤始终计入，避免质量门禁被裁掉。
+    const nonOptionalCount = ids.filter(id => !catalog[id]?.optional).length;
+    if (nonOptionalCount > maxSteps) {
+      ids = this._trimOptionals(ids, maxSteps, catalog);
+      const finalNonOptional = ids.filter(id => !catalog[id]?.optional).length;
+      if (finalNonOptional > maxSteps) {
+        throw new Error(`Selected steps exceed max_steps (${maxSteps}): ${finalNonOptional} non-optional / ${ids.length} total [${ids.join(',')}]`);
+      }
     }
 
-    return ids.map(id => {
-      const def = catalog[id] || {};
-      return {
-        id,
-        skill: def.skill ?? null,
-        requires: def.requires || [],
-        outputs: def.outputs || [],
-        gate: def.gate ?? (id === 'approved' ? 'human-approval' : undefined),
-        gate_verdict: def.gate_verdict,
-        description: def.description || ''
-      };
-    });
+    return ids.map(id => this._stepFromCatalog(id, catalog, { lightweight: skipClosure }));
+  }
+
+  _stepFromCatalog(id, catalog = this.workflow?.step_catalog || {}, { lightweight = false } = {}) {
+    const def = catalog[id] || {};
+    const requires = lightweight && id === 'executing'
+      ? []
+      : lightweight && id === 'verification'
+        ? ['test-report.md']
+        : def.requires || [];
+    const outputs = lightweight && id === 'executing'
+      ? ['handoffs/executing.json']
+      : def.outputs || [];
+    const validators = lightweight && id === 'executing'
+      ? []
+      : def.validators || [];
+    const gateVerdict = lightweight && id === 'executing'
+      ? undefined
+      : def.gate_verdict;
+    const evidenceRequired = lightweight && id === 'executing'
+      ? false
+      : def.evidence_required === true;
+    return {
+      id,
+      skill: def.skill ?? null,
+      requires,
+      outputs,
+      validators,
+      gate: def.gate ?? (id === 'approved' ? 'human-approval' : undefined),
+      gate_verdict: gateVerdict,
+      evidence_required: evidenceRequired,
+      approval_requires: def.approval_requires || [],
+      mandatory: def.mandatory === true,
+      optional: def.optional === true,
+      description: def.description || ''
+    };
+  }
+
+  _ensureMandatorySteps(ids, signals, catalog) {
+    const result = [...ids];
+    const hasStructuredSpec = signals?.hasSpecAndReqs === true;
+    for (const [id, def] of Object.entries(catalog || {})) {
+      if (def?.mandatory !== true || result.includes(id)) continue;
+      const needsStructuredSpec = (def.requires || []).includes('spec.md') && (def.requires || []).includes('requirements.json');
+      if (needsStructuredSpec && !hasStructuredSpec) continue;
+      result.push(id);
+    }
+    return result;
   }
 
   _ensureDependencyClosure(ids, signals) {
@@ -448,8 +580,10 @@ export class PipelineSelector {
 
   _ensureGate(ids, signals) {
     const risk = this._assessRisk(signals);
-    if (risk === 'low') return ids;
     if (ids.includes('approved')) return ids;
+    const rules = this.workflow?.selection_rules || {};
+    if (risk === 'low' && rules.never_skip_gates !== true) return ids;
+    if (!ids.includes('planning')) return ids;
 
     const result = [];
     for (const id of ids) {
@@ -470,5 +604,28 @@ export class PipelineSelector {
       if (ib < 0) return -1;
       return ia - ib;
     });
+  }
+
+  // optional 模块裁剪优先级（越靠前越先被裁掉）：
+  //   detail-expansion → analyze-artifacts → converge
+  //   converge 最靠近验证关口、价值最高，最后裁。
+  //   omission-hunter 由 converge 内部触发，不作为独立 step 裁剪。
+  static OPTIONAL_TRIM_ORDER = ['detail-expansion', 'analyze-artifacts', 'converge'];
+
+  _trimOptionals(ids, maxSteps, catalog) {
+    const optionalIds = new Set(
+      Object.entries(catalog || {})
+        .filter(([, def]) => def?.optional === true)
+        .map(([id]) => id)
+    );
+    let result = [...ids];
+    for (const candidate of PipelineSelector.OPTIONAL_TRIM_ORDER) {
+      if (result.length <= maxSteps) break;
+      if (!optionalIds.has(candidate)) continue;
+      const idx = result.indexOf(candidate);
+      if (idx < 0) continue;
+      result.splice(idx, 1);
+    }
+    return result;
   }
 }

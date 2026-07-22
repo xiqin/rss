@@ -20,10 +20,16 @@
 
 - `.loom/rules/constitution.md`：仅当任务涉及架构决策、目录结构或分层约束时读取全文
 - `.loom/memory/MEMORY.md`：仅当需要回忆历史决策时读取导出视图；新增记忆用 `loom_add_memory` 或 `loom memory add`
+- **结构化账本**（feature/refactor 主线必读）：
+  - 进入 `planning` 前读 `requirements.json`：确认每个 `REQ-xxx` 已声明 `types`、`required_categories`、`behaviors`，每个 behavior 有 `category`/`description`/`status`/`acceptance`/`test_plan`。
+  - 进入 `executing` 前读 `traceability.json`：确认每个 `REQ-xxx` 与每个 `REQ-xxx-Bnn` behavior 至少映射到一个 `tasks/Tn.md`；`tests`/`evidence` 允许为空，由 executing 补齐。
+  - 进入 `verification` 前再次读 `traceability.json`：确认每个 REQ/behavior 的 `tasks`/`tests`/`evidence` 都指向真实文件，且 `evidence` 与 `test-report.md` 的 evidence receipt 一致。
+  - 若阶段涉及结构化收据，读 `receipts/` 下对应 `implementations`/`tests`/`reviews`/`evaluations` 确认证据可验证。
+  - 若阶段涉及 implementation packet，读 `implementation-packets/T*.json` 确认 `packet_sha256` 未过期、`allowed_files` 覆盖当前改动。
 
 **默认不要一口气读取所有上下文文件全文。仅在变更涉及架构决策或跨多模块时例外。**
 
-阶段 outputs 声明 `handoffs/<stage>.json` 时，必须先写入对应 handoff，再调用当前环境提供的上下文压缩能力压缩旧阶段原始对话、探索搜索输出、中间推理和大段日志，然后带 `compression_confirmed=true` 推进到下一阶段。保留 `spec.md`、`plan.md`、`tasks/`、`pipeline.state.json`、`progress.md`、`handoffs/` 和必要报告；不要重新加载旧阶段原始对话或完整日志来续跑。
+阶段 outputs 声明 `handoffs/<stage>.json` 时，必须先写入对应 handoff，再调用当前环境提供的上下文压缩能力压缩旧阶段原始对话、探索搜索输出、中间推理和大段日志，然后带 `compression_confirmed=true` 推进到下一阶段。保留 `spec.md`、`plan.md`、`tasks/`、`requirements.json`、`traceability.json`、`pipeline.state.json`、`progress.md`、`handoffs/`、`receipts/`、`implementation-packets/` 和必要报告；不要重新加载旧阶段原始对话或完整日志来续跑。
 
 ## 入口路由（不替代流水线选择）
 
@@ -34,6 +40,15 @@
 - 需求含糊、设计取舍多：进入 `loom-brainstorming`，必要时一问一答澄清。
 - 准备审查：进入 `loom-requesting-code-review`，先做 Standards + Spec 双轴预审查。
 - QA 验收、分支收尾、索引同步、技能编写、loom 使用咨询：分别进入对应 skill，不要强行启动开发流水线。
+
+### 结构化质量门与内部审查 skill
+
+下列 skill 通过 `step_catalog` 暴露。feature/refactor 主线会强制执行 detail-expansion、analyze-artifacts、converge；智能选择模式中，只要已有 `spec.md` + `requirements.json`，这三步也按 mandatory 语义自动补齐。quickfix/chore 短路显式跳过结构化闭包，避免轻量流程被阻断：
+
+- `loom-detail-expansion`：brainstorming 后、planning 前，按 15 固定维度把 `requirements.json` 中的 REQ 展开为可独立验证的 Behavior Obligation。涉及输入、权限、写操作、状态变化、并发、外部依赖、安全、性能、可观测性等需求必须追加。
+- `loom-analyze-artifacts`：planning 后、approved 前，只读跨产物一致性分析（重复/歧义/欠规格/behavior 缺失/task 未映射/traceability 缺失/依赖环/owns 冲突/非功能要求遗漏）。输出 `artifact-analysis.json`，blocker 阻断 approved gate。
+- `loom-converge`：executing 后、verification 前，对照意图清单反查代码，把 missing/partial/contradicts 生成新 task 回流 executing，直到收敛；输出 `convergence-report.json`，最多 3 轮。内部可触发 `loom-omission-hunter` 做对抗式审查。
+- `loom-omission-hunter`：只读对抗式审查，从 behavior 反查“应该存在但不存在”的代码/测试/预期副作用/禁止副作用/失败场景/公共 API 变更/不变量保护/可观测性。输出 `findings/omission-hunter.json`，blocker 回流到 converge。
 
 开发型任务的具体步骤仍由 `loom-pipeline-selector` 决定，并且必须展示选择结果、等待用户确认后才能初始化状态。
 
@@ -49,7 +64,7 @@
 2. **AI fallback**：信号模糊时调 AI（若注入 aiClient）从 `step_catalog` 选步骤
 3. **规则兜底**：无 AI 或 AI 失败时按风险等级生成基础流程
 
-选择器自动校验护栏：`must_include`（executing + verification）、`dependency_closure`（选 step 自动带 producer）、`never_skip_gates`（planning 后必插 approved）、`max_steps: 10`。
+选择器自动校验护栏：`must_include`（executing + verification）、`mandatory`（已有 spec.md + requirements.json 时补齐 detail-expansion/analyze-artifacts/converge）、`dependency_closure`（选 step 自动带 producer）、`never_skip_gates`（planning 后必插 approved，轻量短路除外）、`max_steps: 13`。
 
 结果必须先明确告知用户，并等待用户明确确认后才能初始化或执行。至少包含：
 
@@ -66,7 +81,7 @@
 **仅当以下情况**回退类型模式：
 
 - `loom_select_pipeline` 抛错或返回空 steps
-- 智能选择步骤超出 `max_steps=10`（提示用户拆分后仍超）
+- 智能选择步骤超出 `max_steps=13`（提示用户拆分后仍超）
 - `.loom/workflow.yaml` 缺少 `step_catalog` 或 `selection_rules`
 - 用户显式指定 `--type <X>` 跳过智能选择
 
@@ -109,10 +124,16 @@
 
 1. **加载对应 skill**（`step.skill` 字段指定的 skill，`null` 表示直接执行无特定 skill）。
 2. **执行该 skill 的流程**，产出对应产物。
-3. **遇到 `gate: human-approval` 时，停下来等待用户确认**。
+3. **遇到 `gate: human-approval` 时，停下来等待用户确认**。若阶段声明 `approval_requires`（如 review-gate 要求 `review-feedback.md`），必须先补齐这些文件并通过 verdict 检查，再等待用户 approve；不得空审批。
 4. **写入阶段 handoff、自动压缩上下文并通过 loom 状态机更新进度**：当前阶段 outputs 声明 `handoffs/<stage>.json` 时，先调用 `loom_stage_checkpoint` 或写入对应 handoff；checkpoint 返回后必须立即调用当前宿主环境的 `compress` 压缩已结束阶段的原始上下文；压缩完成后再调用 `loom_advance_pipeline` 并传 `compression_confirmed=true`，或执行 `loom run --advance --compression-confirmed`。未声明 handoff output 的阶段按状态机直接推进。遇到失败用 `loom run --fail <reason>` 标记。`progress.md` 由 loom 自动生成/更新，不手动编辑。
-5. **完成后告知用户**本步骤产物，再进入下一步。
-6. **执行中发现跨模块影响**：调 `loom_adjust_pipeline` 追加步骤（保留已完成阶段）。
+5. **声明式 validator 阻断时不重跑流水线**：`loom_advance_pipeline` 可能因为 step 声明的 validators（如 `task-state-closure`、`requirement-task-closure`、`planning-artifacts`、`verification-artifacts`、`review-receipts-pass`、`diff-within-ownership`、`convergence-pass`、`no-blocking-findings`）返回 `ok:false` 并附带具体错误（如 `task state closure failed`、`requirement-task closure failed`、`verification artifact validation failed: traceability.json ...`、`planning artifact validation failed: traceability.json ...`）。此时必须按错误内容回到对应阶段补齐结构化账本/任务状态/证据收据，**再重新推进**；禁止用“重跑整个流水线”“重新 brainstorming”“直接改 pipeline.state.json”绕过 validator。常见修复路径：
+   - `task-state-closure` 失败：把缺失的 `tasks/Tn.md` 在 `task-states/Tn.state.json` 中标记为 `done`。
+   - `requirement-task-closure` 失败：把 `spec.md` 中的每个 `REQ-xxx` 至少写入一个 `tasks/Tn.md` 的 frontmatter `requirements`。
+   - `planning-artifacts` 失败：在 `traceability.json` 为每个 `REQ-xxx` 和 `REQ-xxx-Bnn` 补 task 映射（`tests`/`evidence` 可由 executing 补）。
+   - `verification-artifacts` 失败：在 `test-report.md`/`verify-report.md` 提到每个 `REQ-xxx`，并补齐 `traceability.json` 的 behavior 级 `tests`/`evidence` 到真实文件。
+   - 审批 stale / review-gate 空审批：补齐 `review-feedback.md` 且 `verdict: PASS`，或回到对应阶段重写受影响的 approved 产物并重新 approve。
+6. **完成后告知用户**本步骤产物，再进入下一步。
+7. **执行中发现跨模块影响**：调 `loom_adjust_pipeline` 追加步骤（保留已完成阶段）。若 selector 信号变化触发了结构化质量门或内部审查 skill（detail-expansion / analyze-artifacts / converge / omission-hunter），按状态机追加执行，不要手动跳过。
 
 ### Subagent 触发规则
 
@@ -125,6 +146,14 @@
 - 主上下文已严重污染，需要隔离重试
 
 **不满足以上条件时，由主 agent 直接执行，不派发 subagent。**
+
+启用 subagent 时，每个 subagent 的上下文必须包含：
+
+- 当前 `tasks/Tn.md` 的 frontmatter `requirements` 和 `behavior_ids`，以及 `requirements.json` 中对应 REQ 的 `behaviors`（含 `category`/`description`/`acceptance`/`test_plan`）。
+- `traceability.json` 中该 task 对应 REQ/behavior 的现有 `tasks`/`tests`/`evidence` 映射。
+- 需要补齐的 `test_plan` 与 `must_preserve` 不变量（若使用 implementation-packets，从 `implementation-packets/T*.json` 读取）。
+
+subagent 完成时必须把当前 task 的每个 `behavior_ids` 对应 behavior 在 `traceability.json` 中补齐真实 `tests` 和 `evidence` 引用；只更新 REQ 级、不更新 behavior 级视为未完成，禁止把 task 标记为 done。
 
 ### 会话卫生规则
 
@@ -139,7 +168,7 @@
 - **小改动**（单文件修复、配置调整）：智能选择会命中 `quickfix` 短路，跳过规划和审批。
 - **workflow.yaml 不可读**：停止执行，告知用户文件缺失，不得凭记忆假设流水线内容。
 - **步骤中途失败**：用 `loom run --fail <reason>` 记录失败，向用户报告失败原因和建议，等待指示。
-- **智能选择超 max_steps=10**：提示用户拆分需求；拆分后仍超则回退类型模式。
+- **智能选择超 max_steps=13**：提示用户拆分需求；拆分后仍超则回退类型模式。
 - **无上下文续跑**：先读 `loom_get_pipeline_context` / `loom_get_project_status` 或 `pipeline.state.json` + `progress.md`，以 `dynamic_steps` 和当前阶段为准继续执行；先看 `progress.md` 的 Handoffs 摘要，再按需读 `handoffs/<stage>.json`。
 - **需要人工调整步骤**：用 `loom select` 生成 `pipeline-plan.md`，调整后再 `--approve-pipeline`；不要把 `pipeline-plan.md` 作为默认续跑依据。
 - **quickfix 升级**：执行中发现改动涉及 2+ 文件或跨模块依赖，立即暂停并告知用户，建议升级为 `bugfix` 流水线。
@@ -158,3 +187,14 @@
 1. 相关验证命令已经运行，或明确说明无法运行的原因。
 2. 若启用了图后端（见 `.loom/graph.config.json`），已通过 `loom_graph_sync` 同步图索引；未启用时跳过此步。
 3. 重要踩坑、用户偏好或跨会话决策已通过 `loom_add_memory` 或 `loom memory add` 记录。
+4. **结构化账本闭环**（feature/refactor 主线）：
+   - `spec.md` 中每个 `REQ-xxx` 都出现在 `requirements.json`，且有至少一个对应 behavior（`REQ-xxx-Bnn`）。
+   - 每个 behavior 在 `traceability.json` 中有 `tasks`/`tests`/`evidence` 三项，且都指向真实文件。
+   - `test-report.md` 与 `verify-report.md` 都提到每个 `REQ-xxx`，且 evidence receipt 与 `traceability.json` 的 `evidence` 一致。
+   - 有结构化收据时，`receipts/implementations`/`tests`/`reviews`/`evaluations` 下的 JSON 通过 schema 校验，且 `git_tree`/`git_commit`/`diff_sha256` 绑定到当前代码版本。
+   - 使用 implementation-packets 时，`implementation-packets/T*.json` 的 `packet_sha256` 未过期，`allowed_files` 覆盖本次改动。
+5. **声明式 validator 全绿**：`loom_advance_pipeline` 在最终阶段返回 `ok:true`，无 `task-state-closure`/`requirement-task-closure`/`planning-artifacts`/`verification-artifacts` 等错误；若仍报错，先按错误内容补齐账本，不要提交。
+6. **CLI 自检**（可选但推荐）：
+   - `npm run requirements:check -- --spec-dir <dir>` 通过。
+   - `npm run traceability:check -- --spec-dir <dir> --required` 通过。
+   - 使用 implementation-packets 时 `npm run packets:check -- --spec-dir <dir> --task <Tn>` 通过。

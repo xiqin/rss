@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/xiqin/loom/config/receipt.schema.json",
+  "title": "loom Structured Receipts",
+  "description": "结构化收据 schema — 审批/实现/测试/审查/评估收据的统一容器。防止文本 PASS 伪造，绑定 artifact sha256/git tree/commit。",
+  "version": 1,
+  "type": "object",
+  "required": ["kind", "stage", "created_at"],
+  "additionalProperties": true,
+  "properties": {
+    "kind": { "type": "string", "enum": ["approval", "implementation", "test", "review", "evaluation"] },
+    "stage": { "type": "string" },
+    "task_id": { "type": "string", "pattern": "^T\\d+$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "actor": { "type": "string" },
+    "verdict": { "type": "string", "enum": ["pass", "fail", "blocked", "changes_requested", "needs_context"] },
+    "artifact_fingerprints": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    },
+    "git_tree": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "git_commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "diff_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "requirements": { "type": "array", "items": { "type": "string", "pattern": "^REQ-\\d{3,}$" } },
+    "behaviors": { "type": "array", "items": { "type": "string", "pattern": "^REQ-\\d{3,}-B\\d{2,}$" } },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "exit_code", "log_file", "log_sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "command": { "type": "string" },
+          "exit_code": { "type": "integer", "const": 0 },
+          "log_file": { "type": "string" },
+          "log_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/definitions/findingRef" } }
+  },
+  "definitions": {
+    "findingRef": {
+      "type": "object",
+      "required": ["id", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "error", "blocker"] }
+      }
+    }
+  }
+}

@@ -37,7 +37,7 @@ export function resolveTrackedPath(specDir, projectRoot, declaredPath) {
   const value = declaredPath.replace(/\\/g, '/').replace(/\/$/, '');
   if (!value || isAbsolute(value)) return null;
 
-  const specLocal = /^(?:spec\.md|plan\.md|progress\.md|pipeline\.state\.json|test-report\.md|verify-report\.md|qa-[^/]+\.md|manual-checklist\.md|tasks|task-states|handoffs|evidence)(?:\/|$)/;
+  const specLocal = /^(?:spec\.md|plan\.md|requirements\.json|traceability\.json|artifact-analysis\.json|convergence-report\.json|review-request\.md|review-response\.md|progress\.md|pipeline\.state\.json|test-report\.md|verify-report\.md|qa-[^/]+\.md|manual-checklist\.md|tasks|task-states|handoffs|evidence|receipts|findings|implementation-packets)(?:\/|$)/;
   const base = specLocal.test(value) ? specDir : projectRoot;
   const candidate = resolve(base, value);
   return isInside(base, candidate) ? candidate : null;

@@ -116,12 +116,31 @@ describe('inferStageFromArtifacts', () => {
     const dir = tmp();
     write(dir, 'spec.md', 'x'); write(dir, 'plan.md', 'x');
     write(dir, 'progress.md', '| T1 | executing | ...');
-    expect(inferStageFromArtifacts(dir)).toBe('approved');
+    expect(inferStageFromArtifacts(dir)).toBe('analyze-artifacts');
   });
 
   it('maps artifacts to early stages', () => {
     const d1 = tmp(); write(d1, 'spec.md', 'x');
-    expect(inferStageFromArtifacts(d1)).toBe('planning');
+    expect(inferStageFromArtifacts(d1)).toBe('detail-expansion');
     expect(inferStageFromArtifacts(tmp())).toBe('brainstorming');
+  });
+
+  it('does not infer downstream stages from failed reports', () => {
+    const blocked = tmp();
+    write(blocked, 'spec.md', 'x');
+    write(blocked, 'plan.md', 'x');
+    write(blocked, 'artifact-analysis.json', '{"status":"blocked","blocker_count":1}');
+    expect(inferStageFromArtifacts(blocked)).toBe('analyze-artifacts');
+
+    const needsRound = tmp();
+    write(needsRound, 'spec.md', 'x');
+    write(needsRound, 'plan.md', 'x');
+    write(needsRound, 'test-report.md', 'verdict: PASS');
+    write(needsRound, 'convergence-report.json', '{"status":"needs_another_round","blocker_count":1}');
+    expect(inferStageFromArtifacts(needsRound)).toBe('converge');
+
+    const failedVerify = tmp();
+    write(failedVerify, 'verify-report.md', 'verdict: FAIL');
+    expect(inferStageFromArtifacts(failedVerify)).toBe('brainstorming');
   });
 });

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/xiqin/loom/config/requirements.schema.json",
+  "title": "loom Requirements Ledger",
+  "description": "结构化需求清单 schema — 从 spec.md 提取的 REQ-xxx 及其 behavior、types、required_categories、acceptance。驱动 brainstorming 生成、planning/verification 校验。",
+  "version": 1,
+  "type": "object",
+  "required": ["requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "requirements": {
+      "oneOf": [
+        {
+          "type": "array",
+          "description": "数组形式：[{ id, status, types, required_categories, acceptance, behaviors }]",
+          "items": { "$ref": "#/definitions/requirement" }
+        },
+        {
+          "type": "object",
+          "description": "对象形式：{ \"REQ-001\": { ...requirement without id } }",
+          "additionalProperties": { "$ref": "#/definitions/requirementEntry" }
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "requirement": {
+      "type": "object",
+      "required": ["id", "status", "acceptance", "behaviors"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^REQ-\\d{3,}$" },
+        "status": { "type": "string", "enum": ["failing", "in_progress", "candidate_implemented", "passing", "blocked", "superseded"] },
+        "types": { "type": "array", "items": { "type": "string" } },
+        "required_categories": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["happy-path", "boundary", "invalid-input", "authorization", "state-transition", "idempotency", "concurrency", "atomicity", "external-failure", "compatibility", "security", "performance", "observability", "recovery", "forbidden-behavior"] }
+        },
+        "acceptance": { "type": "array", "items": { "type": "string" }, "minItems": 0 },
+        "behaviors": { "type": "array", "items": { "$ref": "#/definitions/behavior" } }
+      }
+    },
+    "requirementEntry": {
+      "type": "object",
+      "required": ["status", "acceptance", "behaviors"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["failing", "in_progress", "candidate_implemented", "passing", "blocked", "superseded"] },
+        "types": { "type": "array", "items": { "type": "string" } },
+        "required_categories": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["happy-path", "boundary", "invalid-input", "authorization", "state-transition", "idempotency", "concurrency", "atomicity", "external-failure", "compatibility", "security", "performance", "observability", "recovery", "forbidden-behavior"] }
+        },
+        "acceptance": { "type": "array", "items": { "type": "string" }, "minItems": 0 },
+        "behaviors": { "type": "array", "items": { "$ref": "#/definitions/behavior" } }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "required": ["id", "category", "description", "status", "acceptance"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^REQ-\\d{3,}-B\\d{2,}$" },
+        "category": { "type": "string", "enum": ["happy-path", "boundary", "invalid-input", "authorization", "state-transition", "idempotency", "concurrency", "atomicity", "external-failure", "compatibility", "security", "performance", "observability", "recovery", "forbidden-behavior"] },
+        "description": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["failing", "in_progress", "candidate_implemented", "passing", "blocked", "superseded"] },
+        "acceptance": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    }
+  }
+}

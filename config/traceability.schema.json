@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/xiqin/loom/config/traceability.schema.json",
+  "title": "loom Traceability Ledger",
+  "description": "REQ -> behavior -> task/test/evidence 结构化追踪账本 schema。planning 写 task 映射，executing 补 tests/evidence，verification 校验闭环。",
+  "version": 1,
+  "type": "object",
+  "required": ["requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "requirements": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/traceabilityEntry" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/traceabilityEntryWithoutId" }
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "traceabilityEntry": {
+      "type": "object",
+      "required": ["id", "tasks", "tests", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^REQ-\\d{3,}$" },
+        "tasks": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "behaviors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/behaviorTraceability" }
+        }
+      }
+    },
+    "traceabilityEntryWithoutId": {
+      "type": "object",
+      "required": ["tasks", "tests", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "tasks": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "behaviors": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/behaviorTraceability" }
+        }
+      }
+    },
+    "behaviorTraceability": {
+      "type": "object",
+      "required": ["tasks", "tests", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "tasks": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

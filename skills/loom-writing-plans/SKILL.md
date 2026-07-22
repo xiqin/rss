@@ -12,13 +12,14 @@ user-invocable: true
 
 ## 触发条件
 
-- `specs/<date+feature>/spec.md` 已存在并经用户确认。
+- `specs/<date+feature>/spec.md` 与 `specs/<date+feature>/requirements.json` 已存在并经用户确认。
 - 需要把 spec 拆为可独立验证的 task 文件。
 
 ## 输出
 
 - `specs/<date+feature>/plan.md`：摘要 + Task 概览。
 - `specs/<date+feature>/tasks/T1.md`、`T2.md`...：每个 task 一个独立文件。
+- `specs/<date+feature>/traceability.json`：REQ 与 behavior 到 task/test/evidence 的结构化追踪账本；planning 阶段至少写入 REQ/behavior 到 task 的初始映射，tests/evidence 可先为空并由 executing 补齐。
 - `specs/<date+feature>/handoffs/planning.json`：规划阶段交接摘要。
 
 ## 产物根目录
@@ -29,13 +30,14 @@ user-invocable: true
 
 ## 执行流程
 
-1. 读取 `specs/<date+feature>/spec.md`，提取功能点、接口、数据模型和边界场景。
+1. 读取 `specs/<date+feature>/spec.md` 与 `specs/<date+feature>/requirements.json`，提取功能点、接口、数据模型、边界场景、Requirement ID 和 behaviors。
 2. 读取 `.loom/rules/constitution.md`；如存在，读取 `.loom/contexts/subagent-context.md`。
 3. 先规划文件结构：创建/修改哪些文件、每个文件职责、哪些文件一起变化。
 4. 按项目实际分层和依赖顺序拆 task：数据/模型 → 业务逻辑 → 接口/UI → 路由/配置 → 集成。
 5. 写 `specs/<date+feature>/plan.md` 概览，再为每个 task 写完整 `specs/<date+feature>/tasks/TN.md`。
-6. 自检并运行自动校验。
-7. 写入 `specs/<date+feature>/handoffs/planning.json`，摘要说明 task 拆分、依赖顺序、关键接口约束、并行/串行边界和主要产物。
+6. 写 `specs/<date+feature>/traceability.json`，把每个 `REQ-xxx` 及其 `REQ-xxx-Bnn` behavior 映射到负责的 task；planning 阶段不允许遗漏 behavior。
+7. 自检并运行自动校验。
+8. 写入 `specs/<date+feature>/handoffs/planning.json`，摘要说明 task 拆分、依赖顺序、关键接口约束、REQ/behavior 映射、并行/串行边界和主要产物。
 
 如果 spec 涵盖多个独立子系统，建议拆成多个计划；每个计划都应能产出可工作、可测试的独立软件。
 
@@ -43,15 +45,44 @@ user-invocable: true
 
 - 每个 task 是一个可独立验证的交付物。
 - 每个 task 包含层级、复杂度、依赖、涉及文件、Requirement ID 验收映射、TDD 步骤、测试说明。
-- **每个 task 文件必须声明 YAML frontmatter**，包含 `owns`（独占写入的文件/目录）、`reads`（只读依赖）、`depends_on`（前置 task）、`complexity`。这些字段驱动 `loom tasks` 命令的冲突检测和批次调度。
+- **每个 task 文件必须声明 YAML frontmatter**，包含 `owns`（独占写入的文件/目录）、`reads`（只读依赖）、`depends_on`（前置 task）、`requirements`（覆盖的 `REQ-xxx`）、`behavior_ids`（覆盖的 `REQ-xxx-Bnn`）、`complexity`。这些字段驱动 `loom tasks` 命令的冲突检测、批次调度和 traceability 初始映射。
 - 依赖必须无循环；有循环依赖时拆开或合并。
 - 后续 task 使用的类型、方法签名和属性名必须与前序 task 匹配。
 - 每个 spec Requirement ID 必须至少映射到一个 task；task 不得使用 spec 中不存在的 Requirement ID。
+- `requirements.json` 中每个 behavior 必须至少映射到一个 task；task 不得使用 `requirements.json` 中不存在的 `behavior_ids`。
 - **`owns` 集合不得有交集**：两个 task 不能同时 owns 同一文件/目录，否则不能并行执行。
+
+## traceability.json 初始账本
+
+planning 阶段必须生成 `specs/<date+feature>/traceability.json`。结构示例：
+
+```json
+{
+  "requirements": {
+    "REQ-001": {
+      "tasks": ["T1"],
+      "tests": [],
+      "evidence": [],
+      "behaviors": {
+        "REQ-001-B01": {
+          "tasks": ["T1"],
+          "tests": [],
+          "evidence": []
+        }
+      }
+    }
+  }
+}
+```
+
+- planning 阶段至少填写 `tasks`；`tests` 与 `evidence` 可为空，由 executing 阶段补齐真实测试和证据。
+- 每个 `REQ-xxx` 必须出现，且每个 `REQ-xxx-Bnn` behavior 必须出现。
+- `traceability.json` 里的 task 引用必须对应真实 `tasks/TN.md`。
+- 不允许用一个 REQ 级映射替代 behavior 级映射；behavior 级遗漏会在 verification 阶段阻断。
 
 ## 自动校验
 
-完成 `specs/<date+feature>/plan.md` 和 `specs/<date+feature>/tasks/Tn.md` 后运行：
+完成 `specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/Tn.md` 和 `specs/<date+feature>/traceability.json` 后运行：
 
 ```bash
 node <skill-dir>/scripts/validate-plan.mjs --spec-dir specs/<date+feature>
@@ -67,7 +98,7 @@ loom tasks --spec-dir specs/<date+feature> --validate
 
 ## 上下文交接
 
-planning 完成后，拆分过程、中间推理和探索性搜索输出可以压缩；executing 阶段只应依赖 `specs/<date+feature>/spec.md`、`specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/`、`specs/<date+feature>/progress.md`、`specs/<date+feature>/handoffs/brainstorming.json`、`specs/<date+feature>/handoffs/planning.json` 和必要规则文件。
+planning 完成后，拆分过程、中间推理和探索性搜索输出可以压缩；executing 阶段只应依赖 `specs/<date+feature>/spec.md`、`specs/<date+feature>/requirements.json`、`specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/`、`specs/<date+feature>/traceability.json`、`specs/<date+feature>/progress.md`、`specs/<date+feature>/handoffs/brainstorming.json`、`specs/<date+feature>/handoffs/planning.json` 和必要规则文件。
 
 ## 检查清单
 
@@ -79,6 +110,8 @@ planning 完成后，拆分过程、中间推理和探索性搜索输出可以�
 
 - [ ] `specs/<date+feature>/plan.md` 包含摘要和 Task 概览表。
 - [ ] 每个 task 文件包含完整字段和可执行步骤。
+- [ ] 每个 task 的 `requirements` 与 `behavior_ids` 覆盖 `requirements.json` 中对应 REQ/behavior。
+- [ ] `specs/<date+feature>/traceability.json` 包含每个 REQ/behavior 到 task 的初始映射。
 - [ ] task 可独立编译或验证。
 - [ ] 分层顺序来自 constitution.md。
 - [ ] 遵守 constitution.md 编码红线。
@@ -104,4 +137,4 @@ planning 完成后，拆分过程、中间推理和探索性搜索输出可以�
 
 ## 完成条件
 
-`specs/<date+feature>/plan.md`、所有 `specs/<date+feature>/tasks/TN.md`、自动校验和 `specs/<date+feature>/handoffs/planning.json` 完成。
+`specs/<date+feature>/plan.md`、所有 `specs/<date+feature>/tasks/TN.md`、`specs/<date+feature>/traceability.json`、自动校验和 `specs/<date+feature>/handoffs/planning.json` 完成。

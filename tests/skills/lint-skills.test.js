@@ -58,7 +58,7 @@ describe('lint-skills script', () => {
       .filter(entry => entry.isDirectory())
       .map(entry => entry.name);
 
-    expect(skillNames.length).toBe(18);
+    expect(skillNames.length).toBe(22);
 
     for (const skillName of skillNames) {
       const skillFile = join(skillsDir, skillName, 'SKILL.md');
