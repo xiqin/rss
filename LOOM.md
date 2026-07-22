@@ -33,7 +33,7 @@ brainstorming → writing-plans → git-worktree → subagent-dev → verificati
 ## Skills 清单
 
 <!-- loom:generate:skills-catalog -->
-8 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 22 个
+11 流水线 + 4 辅助 + 7 通用 + 1 测试 Skill，共 22 个
 
 **核心流水线 Skills：**
 
