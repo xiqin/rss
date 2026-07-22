@@ -1,6 +1,6 @@
 {
   "name": "loom-engineering",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Loom — AI 工程化框架",
   "type": "module",
   "main": "./plugin.mjs",
