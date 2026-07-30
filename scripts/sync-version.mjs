@@ -33,6 +33,10 @@ const SHELL_TARGETS = [
   { path: 'scripts/common.ps1', pattern: /^\$DefaultVersion = "[^"]*"/m, replacement: `$DefaultVersion = "${V}"` },
 ];
 
+const TEXT_TARGETS = [
+  { path: 'docs/system-design.md', pattern: /\| v\d+\.\d+\.\d+ \|/m, replacement: `| v${V} |` },
+];
+
 // ── Run ────────────────────────────────────────────────────────────────
 
 let outOfSync = 0;
@@ -63,6 +67,29 @@ for (const target of SHELL_TARGETS) {
   const content = readFileSync(fullPath, 'utf-8');
   if (!target.pattern.test(content)) {
     console.error(`  ✘ ${target.path} — VERSION pattern not found`);
+    outOfSync++;
+    continue;
+  }
+  const updated = content.replace(target.pattern, target.replacement);
+  if (content !== updated) {
+    if (CHECK) {
+      console.error(`  ✘ ${target.path} — version mismatch (expected ${V})`);
+      outOfSync++;
+    } else {
+      writeFileSync(fullPath, updated, 'utf-8');
+      console.log(`  ✔ ${target.path} → ${V}`);
+    }
+  } else {
+    console.log(`  · ${target.path} — already ${V}`);
+  }
+}
+
+// Text targets
+for (const target of TEXT_TARGETS) {
+  const fullPath = join(ROOT, target.path);
+  const content = readFileSync(fullPath, 'utf-8');
+  if (!target.pattern.test(content)) {
+    console.error(`  ✘ ${target.path} — version pattern not found`);
     outOfSync++;
     continue;
   }
