@@ -28,11 +28,11 @@ user-invocable: true
 
 进入人工判断前运行：
 
-```bash
-node <skill-dir>/scripts/verify-artifacts.mjs --spec-dir specs/<date+feature>
-```
+调用 MCP 工具 `loom_verify_artifacts`，参数：`spec_dir: "specs/<date+feature>"`。
 
-脚本通过只代表产物齐全且没有明显机械性缺陷；脚本失败时，先修复或补齐证据。
+不要在用户项目或全局 opencode skill 目录中直接执行 `node <skill-dir>/scripts/verify-artifacts.mjs`。该脚本是 loom MCP 服务器进程内的工具实现，直接执行部署后的 skill 脚本会因为相对导入脱离 npm 包运行时而失败。
+
+工具返回 `ok: true` 只代表产物齐全且没有明显机械性缺陷；返回 `ok: false` 时，先修复或补齐证据。
 
 ## 执行流程
 

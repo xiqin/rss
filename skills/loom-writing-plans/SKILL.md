@@ -84,11 +84,11 @@ planning 阶段必须生成 `specs/<date+feature>/traceability.json`。结构示
 
 完成 `specs/<date+feature>/plan.md`、`specs/<date+feature>/tasks/Tn.md` 和 `specs/<date+feature>/traceability.json` 后运行：
 
-```bash
-node <skill-dir>/scripts/validate-plan.mjs --spec-dir specs/<date+feature>
-```
+调用 MCP 工具 `loom_validate_plan`，参数：`spec_dir: "specs/<date+feature>"`。
 
-脚本失败时，先修复计划文件，再进入用户确认 gate。
+不要在用户项目或全局 opencode skill 目录中直接执行 `node <skill-dir>/scripts/validate-plan.mjs`。该脚本是 loom MCP 服务器进程内的工具实现，直接执行部署后的 skill 脚本会因为相对导入脱离 npm 包运行时而失败。
+
+工具返回 `ok: false` 时，先修复计划文件，再进入用户确认 gate。
 
 如已安装 loom CLI，追加运行冲突检测（有冲突则必须修改 owns 声明或调整并行策略）：
 

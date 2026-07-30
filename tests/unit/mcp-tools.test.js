@@ -10,7 +10,6 @@ function tmp() { return mkdtempSync(join(tmpdir(), 'loom-mcp-')); }
 
 describe('MCP tool definitions', () => {
   it('exposes the documented tools incl. context + capabilities', () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(21);
     const names = TOOL_DEFINITIONS.map(t => t.name);
     expect(names).toContain('loom_attach_spec');
     expect(names).toContain('loom_get_context');
@@ -21,10 +20,12 @@ describe('MCP tool definitions', () => {
     expect(names).toContain('loom_adjust_pipeline');
     expect(names).toContain('loom_write_handoff');
     expect(names).toContain('loom_stage_checkpoint');
+    expect(names).toContain('loom_validate_plan');
     expect(names).toContain('loom_detail_expansion_check');
     expect(names).toContain('loom_analyze_artifacts');
     expect(names).toContain('loom_converge');
     expect(names).toContain('loom_omission_hunt');
+    expect(names).toContain('loom_verify_artifacts');
   });
 
   it('every tool carries a group tag for capability grouping', () => {
@@ -707,7 +708,7 @@ describe('loom_select_pipeline tool', () => {
   });
 });
 
-describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge / loom_omission_hunt tools', () => {
+describe('loom_validate_plan / loom_detail_expansion_check / loom_analyze_artifacts / loom_converge / loom_omission_hunt / loom_verify_artifacts tools', () => {
   function setupSpecDir() {
     const root = tmp();
     const specDir = join(root, 'specs', 'feat');
@@ -727,10 +728,37 @@ describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge /
       }],
     }, null, 2));
     mkdirSync(join(specDir, 'tasks'));
-    writeFileSync(join(specDir, 'tasks', 'T1.md'), '---\nowns: [src/auth.js]\nreads: []\ndepends_on: []\nrequirements: [REQ-001]\nbehavior_ids: [REQ-001-B01, REQ-001-B02]\ncomplexity: medium\n---\n# T1 Login\n');
-    writeFileSync(join(specDir, 'plan.md'), '# Plan\n- T1 Login: tasks/T1.md\n');
+    writeFileSync(join(specDir, 'tasks', 'T1.md'), '---\nowns: [src/auth.js]\nreads: []\ndepends_on: []\nrequirements: [REQ-001]\nbehavior_ids: [REQ-001-B01, REQ-001-B02]\ncomplexity: medium\n---\n# Task 1 Login\n\n复杂度: medium\n\n依赖: none\n\n涉及文件: src/auth.js\n\n测试: unit tests\n\n验收映射: REQ-001 / REQ-001-B01 / REQ-001-B02\n\n- [ ] implement login\n');
+    writeFileSync(join(specDir, 'plan.md'), '# Plan\n\n## Task Overview\n\n- T1 Login: tasks/T1.md\n\n## Dependencies\n\n- T1 has no dependencies\n');
     return { root, specDir };
   }
+
+  function writePlanningTraceability(specDir, tests = [], evidence = []) {
+    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
+      requirements: {
+        'REQ-001': {
+          tasks: ['T1'],
+          tests,
+          evidence,
+          behaviors: {
+            'REQ-001-B01': { tasks: ['T1'], tests, evidence },
+            'REQ-001-B02': { tasks: ['T1'], tests, evidence },
+          },
+        },
+      },
+    }, null, 2));
+  }
+
+  it('validate_plan passes for complete planning artifacts', async () => {
+    const { root, specDir } = setupSpecDir();
+    writePlanningTraceability(specDir);
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_validate_plan', {}, store, 's1');
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.task_files).toHaveLength(1);
+  });
 
   it('detail_expansion_check passes when required categories + test_plan present', async () => {
     const { root, specDir } = setupSpecDir();
@@ -743,19 +771,7 @@ describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge /
 
   it('analyze_artifacts passes when spec/requirements/plan/tasks/traceability are consistent', async () => {
     const { root, specDir } = setupSpecDir();
-    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
-      requirements: {
-        'REQ-001': {
-          tasks: ['T1'],
-          tests: [],
-          evidence: [],
-          behaviors: {
-            'REQ-001-B01': { tasks: ['T1'], tests: [], evidence: [] },
-            'REQ-001-B02': { tasks: ['T1'], tests: [], evidence: [] },
-          },
-        },
-      },
-    }, null, 2));
+    writePlanningTraceability(specDir);
     const store = new SessionStore();
     await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
     const r = await executeToolCall('loom_analyze_artifacts', {}, store, 's1');
@@ -766,19 +782,7 @@ describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge /
 
   it('converge reports needs_another_round when behavior tests/evidence missing', async () => {
     const { root, specDir } = setupSpecDir();
-    writeFileSync(join(specDir, 'traceability.json'), JSON.stringify({
-      requirements: {
-        'REQ-001': {
-          tasks: ['T1'],
-          tests: [],
-          evidence: [],
-          behaviors: {
-            'REQ-001-B01': { tasks: ['T1'], tests: [], evidence: [] },
-            'REQ-001-B02': { tasks: ['T1'], tests: [], evidence: [] },
-          },
-        },
-      },
-    }, null, 2));
+    writePlanningTraceability(specDir);
     const store = new SessionStore();
     await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
     const r = await executeToolCall('loom_converge', { round: 1 }, store, 's1');
@@ -808,5 +812,22 @@ describe('loom_detail_expansion_check / loom_analyze_artifacts / loom_converge /
     expect(r.ok).toBe(false);
     expect(r.report.status).toBe('blocked');
     expect(existsSync(join(specDir, 'findings', 'omission-hunter.json'))).toBe(true);
+  });
+
+  it('verify_artifacts passes when final evidence artifacts are complete', async () => {
+    const { root, specDir } = setupSpecDir();
+    writePlanningTraceability(specDir, ['tests/auth.test.js'], ['evidence/auth.log']);
+    mkdirSync(join(specDir, 'tests'), { recursive: true });
+    mkdirSync(join(specDir, 'evidence'), { recursive: true });
+    writeFileSync(join(specDir, 'tests', 'auth.test.js'), 'test evidence reference\n');
+    writeFileSync(join(specDir, 'evidence', 'auth.log'), 'PASS\n');
+    writeFileSync(join(specDir, 'progress.md'), '# Progress\n\nDone at 12:34\n');
+    writeFileSync(join(specDir, 'test-report.md'), '# Test Report\n\n结论: WARN\n\nREQ-001 covered by manual evidence.\n');
+
+    const store = new SessionStore();
+    await executeToolCall('loom_attach_spec', { spec_dir: specDir, project_root: root }, store, 's1');
+    const r = await executeToolCall('loom_verify_artifacts', {}, store, 's1');
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
   });
 });

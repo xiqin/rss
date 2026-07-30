@@ -307,7 +307,7 @@ loom index
 ```
 
 - **codegraph**（https://github.com/colbymchenry/codegraph）是**外部独立工具**，非 npm 依赖：tree-sitter AST → SQLite 图，零配置，索引存项目内 `.codegraph/`。
-- **建图**：`loom init-project` 检测到 codegraph CLI 时自动跑 `codegraph init`（`--no-codegraph` 跳过）。
+- **建图**：`loom init-project` 只写入图后端配置，不自动执行 `codegraph init`；需要索引时由用户按需手动运行。
 - **MCP**：安装时各 adapter 的 `_ensureMcpConfig` 在 codegraph CLI 可用时注册 `codegraph serve --mcp`，AI 会话可实时调 `codegraph_*` 工具查图。
 - **无后端**：codegraph 缺失时跳过图查询能力，影响范围分析改用源码搜索和人工判断。
 - **诊断**：`loom doctor` 的 index 检查识别 `.codegraph/`，存在则报告 codegraph 后端，否则报告索引更新已跳过。

@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { initProject, normalizeToolIds } from '../../skills/loom-init-project/scripts/init-project.mjs';
@@ -38,36 +37,7 @@ export default async function initProjectCommand(options = {}) {
     }
   }
 
-  if (options.codegraph !== false) {
-    maybeInitCodegraph(cwd);
-  }
-
   console.log('\n  Done. Review .loom/** [TODO] items before relying on generated context.\n');
-}
-
-/**
- * codegraph 引导：CLI 在 PATH 且尚未建图时，跑 `codegraph init` 建立图索引。
- * codegraph 缺失则跳过图查询能力。--no-codegraph 可禁用本步骤。
- */
-function maybeInitCodegraph(cwd) {
-  if (existsSync(join(cwd, '.codegraph'))) {
-    console.log('\n  codegraph: .codegraph/ already present, skipping init');
-    return;
-  }
-  const win = process.platform === 'win32';
-  const probe = spawnSync('codegraph', ['--version'], { stdio: 'ignore', shell: win, windowsHide: true });
-  if (probe.status !== 0) {
-    console.log('\n  codegraph: CLI not found — codegraph indexing disabled');
-    console.log('  Install for richer indexing: https://github.com/colbymchenry/codegraph');
-    return;
-  }
-  console.log('\n  codegraph: building graph index (codegraph init)...');
-  const r = spawnSync('codegraph', ['init', cwd], { cwd, stdio: 'inherit', shell: win, windowsHide: true });
-  if (r.status === 0) {
-    console.log('  codegraph: graph index ready — loom index will delegate to codegraph');
-  } else {
-    console.log('  codegraph: init failed; codegraph indexing disabled until codegraph is ready');
-  }
 }
 
 async function resolveTools(cwd, options) {

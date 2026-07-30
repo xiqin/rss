@@ -10,7 +10,6 @@ import {
 import { basename, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { execSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -101,11 +100,8 @@ export function initProject(options = {}) {
       result,
       force
     );
-    // 写入图后端配置；codegraph 后端额外尝试自动建图（向后兼容）
+    // 写入图后端配置；索引创建由用户按需手动运行，初始化不触发外部命令。
     writeGraphConfig(cwd, graphBackend, result, force);
-    if (graphBackend === 'codegraph') {
-      ensureCodegraphIndex(cwd, result);
-    }
   }
 
   // pm 角色：产品上下文模板（变量由 SKILL.md 问卷后填充，此处保留占位符待补）
@@ -520,16 +516,6 @@ function buildGraphConfig(backend) {
   return base;
 }
 
-// codegraph 后端：尝试 codegraph init 自动建图（向后兼容）；不可用时不失败
-function ensureCodegraphIndex(root, result) {
-  try {
-    execSync('codegraph init', { cwd: root, stdio: 'ignore', timeout: 30000 });
-    result.codegraphInit = 'ok';
-  } catch {
-    result.codegraphInit = 'unavailable (codegraph CLI not found or init failed; graph queries will be skipped)';
-  }
-}
-
 export function normalizeToolIds(value) {
   const items = Array.isArray(value)
     ? value
@@ -686,9 +672,6 @@ function printReport(result) {
   console.log(`graph backend: ${result.graphBackend}`);
   console.log(`tech stack: ${result.techStack}`);
   console.log(`tools: ${result.detectedTools.join(', ') || 'none'}`);
-  if (result.codegraphInit) {
-    console.log(`codegraph init: ${result.codegraphInit}`);
-  }
   console.log(`written: ${result.written.length}`);
   for (const file of result.written) {
     console.log(`  + ${relative(result.root, file)}`);

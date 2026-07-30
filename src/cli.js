@@ -22,7 +22,7 @@ program
   .option('--cwd <path>', 'Project root (default: current working directory)')
   .option('--tools <list>', 'Comma-separated tools: claude-code,codex,cursor,copilot,opencode')
   .option('--force', 'Overwrite existing loom-managed files')
-  .option('--no-codegraph', 'Skip codegraph init even if CLI is available')
+  .option('--no-codegraph', 'Deprecated no-op: init-project no longer runs codegraph init')
   .action(async (options) => {
     const { default: initProjectCommand } = await import('./commands/init-project.js');
     await initProjectCommand(options);

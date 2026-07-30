@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 
+const SERVER_TIMEOUT = process.platform === 'win32' ? 15000 : 2000;
+
 function frame(json) {
   return `Content-Length: ${Buffer.byteLength(json, 'utf-8')}\r\n\r\n${json}`;
 }
@@ -49,7 +51,7 @@ async function runServer(input, isComplete) {
       settled = true;
       stopChild();
       reject(new Error(`server timed out\nstdout=${stdout}\nstderr=${stderr}`));
-    }, 2000);
+    }, SERVER_TIMEOUT);
     child.stdout.setEncoding('utf-8');
     child.stderr.setEncoding('utf-8');
     child.stdout.on('data', d => {

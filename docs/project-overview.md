@@ -301,7 +301,7 @@ npm run generate:check   # CI 检查是否过期
 
 ## 11. codegraph 集成（可选）
 
-`loom index` / `loom init-project` 检测 `codegraph` CLI；可用时建图（tree-sitter AST → SQLite，存 `.codegraph/`）并注册其 MCP server，AI 可调 `codegraph_*` 实时查图做影响范围分析；缺失时跳过，改用源码搜索补充判断。`loom doctor` 的 index 检查会报告后端状态。
+`loom init-project` 只写入图后端配置，不自动执行 `codegraph init`。需要索引时由用户按需运行 `loom index` 或手动创建 `.codegraph/`；AI 可调 `codegraph_*` 实时查图做影响范围分析，缺失时改用源码搜索补充判断。`loom doctor` 的 index 检查会报告后端状态。
 
 ---
 
